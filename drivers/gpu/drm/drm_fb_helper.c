@@ -1470,6 +1470,7 @@ static int drm_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper,
 	struct drm_fb_helper_surface_size sizes;
 	int gamma_size = 0;
 
+pr_info("drm_fb_helper_single_fb_probe\n");
 	memset(&sizes, 0, sizeof(struct drm_fb_helper_surface_size));
 	sizes.surface_depth = 24;
 	sizes.surface_bpp = 32;
@@ -1513,6 +1514,7 @@ static int drm_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper,
 	}
 
 	crtc_count = 0;
+pr_info("fb_helper->crtc_count %i\n", fb_helper->crtc_count);
 	for (i = 0; i < fb_helper->crtc_count; i++) {
 		struct drm_display_mode *desired_mode;
 		struct drm_mode_set *mode_set;
@@ -1526,6 +1528,7 @@ static int drm_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper,
 		desired_mode = fb_helper->crtc_info[i].desired_mode;
 		mode_set = &fb_helper->crtc_info[i].mode_set;
 
+pr_info("desired_mode %in", desired_mode ? 1 : 0);
 		if (!desired_mode)
 			continue;
 
@@ -2245,6 +2248,7 @@ int drm_fb_helper_initial_config(struct drm_fb_helper *fb_helper, int bpp_sel)
 	struct drm_device *dev = fb_helper->dev;
 	int count = 0;
 
+pr_info("drm_fb_helper_initial_config\n");
 	if (!drm_fbdev_emulation)
 		return 0;
 

@@ -18,8 +18,11 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/console.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/serial_core.h>
 #include <linux/serial.h>
 #include <linux/io.h>
@@ -224,12 +227,18 @@ static inline void sccnxp_write(struct uart_port *port, u8 reg, u8 v)
 
 static inline u8 sccnxp_port_read(struct uart_port *port, u8 reg)
 {
-	return sccnxp_read(port, (port->line << 3) + reg);
+	u8 ret = sccnxp_read(port, (port->line << 3) + reg);
+
+	ndelay(17);
+
+	return ret;
 }
 
 static inline void sccnxp_port_write(struct uart_port *port, u8 reg, u8 v)
 {
 	sccnxp_write(port, (port->line << 3) + reg, v);
+
+	ndelay(17);
 }
 
 static int sccnxp_update_best_err(int a, int b, int *besterr)
@@ -362,7 +371,6 @@ static void sccnxp_handle_rx(struct uart_port *port)
 		sr &= SR_PE | SR_FE | SR_OVR | SR_BRK;
 
 		ch = sccnxp_port_read(port, SCCNXP_RHR_REG);
-
 		port->icount.rx++;
 		flag = TTY_NORMAL;
 
@@ -806,7 +814,6 @@ static void sccnxp_console_putchar(struct uart_port *port, int c)
 			sccnxp_port_write(port, SCCNXP_THR_REG, c);
 			break;
 		}
-		barrier();
 	}
 }
 
@@ -847,10 +854,25 @@ static const struct platform_device_id sccnxp_id_table[] = {
 };
 MODULE_DEVICE_TABLE(platform, sccnxp_id_table);
 
+static const struct of_device_id sccnxp_dt_id_table[] = {
+	{ .compatible = "nxp,sc2681",	.data = &sc2681, },
+	{ .compatible = "nxp,sc2691",	.data = &sc2691, },
+	{ .compatible = "nxp,sc2692",	.data = &sc2692, },
+	{ .compatible = "nxp,sc2891",	.data = &sc2891, },
+	{ .compatible = "nxp,sc2892",	.data = &sc2892, },
+	{ .compatible = "nxp,sc28202",	.data = &sc28202, },
+	{ .compatible = "nxp,sc68681",	.data = &sc68681, },
+	{ .compatible = "nxp,sc68692",	.data = &sc68692, },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sccnxp_dt_id_table);
+
 static int sccnxp_probe(struct platform_device *pdev)
 {
 	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	struct sccnxp_pdata *pdata = dev_get_platdata(&pdev->dev);
+	const struct of_device_id *of_id =
+		of_match_device(sccnxp_dt_id_table, &pdev->dev);
 	int i, ret, uartclk;
 	struct sccnxp_port *s;
 	void __iomem *membase;
@@ -869,7 +891,22 @@ static int sccnxp_probe(struct platform_device *pdev)
 
 	spin_lock_init(&s->lock);
 
-	s->chip = (struct sccnxp_chip *)pdev->id_entry->driver_data;
+	if (of_id) {
+		s->chip = (struct sccnxp_chip *)of_id->data;
+
+		of_property_read_u32(pdev->dev.of_node, "poll-interval",
+				     &s->pdata.poll_time_us);
+		of_property_read_u32(pdev->dev.of_node, "reg-shift",
+				     &s->pdata.reg_shift);
+		of_property_read_u32_array(pdev->dev.of_node,
+					   "nxp,sccnxp-io-cfg",
+					   s->pdata.mctrl_cfg, s->chip->nr);
+	} else {
+		s->chip = (struct sccnxp_chip *)pdev->id_entry->driver_data;
+
+		if (pdata)
+			memcpy(&s->pdata, pdata, sizeof(struct sccnxp_pdata));
+	}
 
 	s->regulator = devm_regulator_get(&pdev->dev, "vcc");
 	if (!IS_ERR(s->regulator)) {
@@ -900,22 +937,16 @@ static int sccnxp_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
-	if (pdata)
-		memcpy(&s->pdata, pdata, sizeof(struct sccnxp_pdata));
-
 	if (s->pdata.poll_time_us) {
 		dev_info(&pdev->dev, "Using poll mode, resolution %u usecs\n",
 			 s->pdata.poll_time_us);
 		s->poll = 1;
-	}
-
-	if (!s->poll) {
-		s->irq = platform_get_irq(pdev, 0);
-		if (s->irq < 0) {
-			dev_err(&pdev->dev, "Missing irq resource data\n");
-			ret = -ENXIO;
+	} else {
+		ret = platform_get_irq(pdev, 0);
+		if (!IS_ERR_VALUE(ret))
+			s->irq = ret;
+		else
 			goto err_out;
-		}
 	}
 
 	s->uart.owner		= THIS_MODULE;
@@ -980,7 +1011,6 @@ static int sccnxp_probe(struct platform_device *pdev)
 		return 0;
 	}
 
-	uart_unregister_driver(&s->uart);
 err_out:
 	if (!IS_ERR(s->regulator))
 		return regulator_disable(s->regulator);
@@ -1011,7 +1041,8 @@ static int sccnxp_remove(struct platform_device *pdev)
 
 static struct platform_driver sccnxp_uart_driver = {
 	.driver = {
-		.name	= SCCNXP_NAME,
+		.name		= SCCNXP_NAME,
+		.of_match_table	= sccnxp_dt_id_table,
 	},
 	.probe		= sccnxp_probe,
 	.remove		= sccnxp_remove,

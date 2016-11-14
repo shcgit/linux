@@ -2070,6 +2070,7 @@ put_pm:
 
 enum coda_platform {
 	CODA_IMX27,
+	CODA_IMX51,
 	CODA_IMX53,
 	CODA_IMX6Q,
 	CODA_IMX6DL,
@@ -2088,6 +2089,21 @@ static const struct coda_devtype coda_devdata[] = {
 		.num_vdevs    = ARRAY_SIZE(codadx6_video_devices),
 		.workbuf_size = 288 * 1024 + FMO_SLICE_SAVE_BUF_SIZE * 8 * 1024,
 		.iram_size    = 0xb000,
+	},
+	[CODA_IMX51] = {
+		.firmware     = {
+			"vpu_fw_imx51.bin",
+			"v4l-codahx14-imx51.bin"
+		},
+		/* TODO */
+		.product      = CODA_7541,
+		.codecs       = coda7_codecs,
+		.num_codecs   = ARRAY_SIZE(coda7_codecs),
+		.vdevs        = coda7_video_devices,
+		.num_vdevs    = ARRAY_SIZE(coda7_video_devices),
+		.workbuf_size = 128 * 1024,
+		.tempbuf_size = 304 * 1024,
+		.iram_size    = 0x14000,
 	},
 	[CODA_IMX53] = {
 		.firmware     = {
@@ -2142,6 +2158,7 @@ MODULE_DEVICE_TABLE(platform, coda_platform_ids);
 #ifdef CONFIG_OF
 static const struct of_device_id coda_dt_ids[] = {
 	{ .compatible = "fsl,imx27-vpu", .data = &coda_devdata[CODA_IMX27] },
+	{ .compatible = "fsl,imx51-vpu", .data = &coda_devdata[CODA_IMX51] },
 	{ .compatible = "fsl,imx53-vpu", .data = &coda_devdata[CODA_IMX53] },
 	{ .compatible = "fsl,imx6q-vpu", .data = &coda_devdata[CODA_IMX6Q] },
 	{ .compatible = "fsl,imx6dl-vpu", .data = &coda_devdata[CODA_IMX6DL] },

@@ -11,5 +11,6 @@ menuconfig ARCH_CLPS711X
 	select MFD_SYSCON
 	select OF_IRQ
 	select USE_OF
+	select FIQ
 	help
 	  Select this if you use ARMv4T Cirrus Logic chips.

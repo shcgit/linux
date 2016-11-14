@@ -240,7 +240,7 @@ static void DoC_Delay(struct doc_priv *doc, unsigned short cycles)
 static int _DoC_WaitReady(struct doc_priv *doc)
 {
 	void __iomem *docptr = doc->virtadr;
-	unsigned long timeo = jiffies + (HZ * 10);
+	unsigned long timeo = jiffies + msecs_to_jiffies(20);
 
 	if (debug)
 		printk("_DoC_WaitReady...\n");
@@ -252,7 +252,7 @@ static int _DoC_WaitReady(struct doc_priv *doc)
 				return -EIO;
 			}
 			udelay(1);
-			cond_resched();
+//			cond_resched();
 		}
 	} else {
 		while (!(ReadDOC(docptr, CDSNControl) & CDSN_CTRL_FR_B)) {
@@ -261,7 +261,7 @@ static int _DoC_WaitReady(struct doc_priv *doc)
 				return -EIO;
 			}
 			udelay(1);
-			cond_resched();
+//			cond_resched();
 		}
 	}
 

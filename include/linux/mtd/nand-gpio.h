@@ -3,12 +3,14 @@
 
 #include <linux/mtd/nand.h>
 
+#define MAX_NAND_PER_CHIP	4
+
 struct gpio_nand_platdata {
-	int	gpio_nce;
-	int	gpio_nwp;
-	int	gpio_cle;
-	int	gpio_ale;
-	int	gpio_rdy;
+	int	gpio_ale;			/* ALE */
+	int	gpio_cle;			/* CLE */
+	int	gpio_nwp;			/* NWP (Optional) */
+	int	gpio_nce[MAX_NAND_PER_CHIP];	/* NCE */
+	int	gpio_rdy[MAX_NAND_PER_CHIP];	/* RDY (Optional) */
 	void	(*adjust_parts)(struct gpio_nand_platdata *, size_t);
 	struct mtd_partition *parts;
 	unsigned int num_parts;

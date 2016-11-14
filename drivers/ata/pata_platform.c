@@ -43,13 +43,28 @@ static int pata_platform_set_mode(struct ata_link *link, struct ata_device **unu
 	return 0;
 }
 
+static unsigned int pata_platform_xfer_noirq(struct ata_device *dev,
+					     unsigned char *buf,
+					     unsigned int buflen, int rw)
+{
+	unsigned long flags;
+	unsigned int consumed;
+
+	local_irq_save(flags);
+	/* Use 16-bit transfer */
+	consumed = ata_sff_data_xfer(dev, buf, buflen, rw);
+	local_irq_restore(flags);
+
+	return consumed;
+}
+
 static struct scsi_host_template pata_platform_sht = {
 	ATA_PIO_SHT(DRV_NAME),
 };
 
 static struct ata_port_operations pata_platform_port_ops = {
 	.inherits		= &ata_sff_port_ops,
-	.sff_data_xfer		= ata_sff_data_xfer_noirq,
+	.sff_data_xfer		= pata_platform_xfer_noirq,
 	.cable_detect		= ata_cable_unknown,
 	.set_mode		= pata_platform_set_mode,
 };
@@ -120,7 +135,7 @@ int __pata_platform_probe(struct device *dev, struct resource *io_res,
 	 */
 	if (irq_res && irq_res->start > 0) {
 		irq = irq_res->start;
-		irq_flags = irq_res->flags & IRQF_TRIGGER_MASK;
+		irq_flags = (irq_res->flags & IRQF_TRIGGER_MASK) | IRQF_SHARED;
 	}
 
 	/*
@@ -147,19 +162,21 @@ int __pata_platform_probe(struct device *dev, struct resource *io_res,
 	 * Handle the MMIO case
 	 */
 	if (mmio) {
-		ap->ioaddr.cmd_addr = devm_ioremap(dev, io_res->start,
-				resource_size(io_res));
-		ap->ioaddr.ctl_addr = devm_ioremap(dev, ctl_res->start,
-				resource_size(ctl_res));
+		ap->ioaddr.cmd_addr = devm_ioremap_resource(dev, io_res);
+		if (IS_ERR(ap->ioaddr.cmd_addr))
+			return PTR_ERR(ap->ioaddr.cmd_addr);
+		ap->ioaddr.ctl_addr = devm_ioremap_resource(dev, ctl_res);
+		if (IS_ERR(ap->ioaddr.ctl_addr))
+			return PTR_ERR(ap->ioaddr.ctl_addr);
 	} else {
 		ap->ioaddr.cmd_addr = devm_ioport_map(dev, io_res->start,
 				resource_size(io_res));
 		ap->ioaddr.ctl_addr = devm_ioport_map(dev, ctl_res->start,
 				resource_size(ctl_res));
-	}
-	if (!ap->ioaddr.cmd_addr || !ap->ioaddr.ctl_addr) {
-		dev_err(dev, "failed to map IO/CTL base\n");
-		return -ENOMEM;
+		if (!ap->ioaddr.cmd_addr || !ap->ioaddr.ctl_addr) {
+			dev_err(dev, "failed to map IO/CTL base\n");
+			return -ENOMEM;
+		}
 	}
 
 	ap->ioaddr.altstatus_addr = ap->ioaddr.ctl_addr;

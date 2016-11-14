@@ -1191,7 +1191,6 @@ static int imx_uart_dma_init(struct imx_port *sport)
 	}
 
 	sport->dma_is_inited = 1;
-
 	return 0;
 err:
 	imx_uart_dma_exit(sport);
