@@ -54,6 +54,7 @@ static struct ulpi_info ulpi_ids[] = {
 
 static int ulpi_set_otg_flags(struct usb_phy *phy)
 {
+pr_info("ULPI set otg flags\n");
 	unsigned int flags = ULPI_OTG_CTRL_DP_PULLDOWN |
 			     ULPI_OTG_CTRL_DM_PULLDOWN;
 
@@ -78,6 +79,7 @@ static int ulpi_set_otg_flags(struct usb_phy *phy)
 
 static int ulpi_set_fc_flags(struct usb_phy *phy)
 {
+pr_info("ULPI set fc flags\n");
 	unsigned int flags = 0;
 
 	/*
@@ -120,6 +122,7 @@ static int ulpi_set_fc_flags(struct usb_phy *phy)
 
 static int ulpi_set_ic_flags(struct usb_phy *phy)
 {
+pr_info("ULPI set ic flags\n");
 	unsigned int flags = 0;
 
 	if (phy->flags & ULPI_IC_AUTORESUME)
@@ -139,6 +142,7 @@ static int ulpi_set_ic_flags(struct usb_phy *phy)
 
 static int ulpi_set_flags(struct usb_phy *phy)
 {
+pr_info("ULPI set flags\n");
 	int ret;
 
 	ret = ulpi_set_otg_flags(phy);
@@ -154,6 +158,7 @@ static int ulpi_set_flags(struct usb_phy *phy)
 
 static int ulpi_check_integrity(struct usb_phy *phy)
 {
+pr_info("ULPI check integrity\n");
 	int ret, i;
 	unsigned int val = 0x55;
 
@@ -180,6 +185,7 @@ static int ulpi_check_integrity(struct usb_phy *phy)
 
 static int ulpi_init(struct usb_phy *phy)
 {
+pr_info("ULPI init\n");
 	int i, vid, pid, ret;
 	u32 ulpi_id = 0;
 
@@ -211,6 +217,7 @@ static int ulpi_init(struct usb_phy *phy)
 
 static int ulpi_set_host(struct usb_otg *otg, struct usb_bus *host)
 {
+pr_info("ULPI set host\n");
 	struct usb_phy *phy = otg->usb_phy;
 	unsigned int flags = usb_phy_io_read(phy, ULPI_IFC_CTRL);
 
@@ -237,6 +244,7 @@ static int ulpi_set_host(struct usb_otg *otg, struct usb_bus *host)
 
 static int ulpi_set_vbus(struct usb_otg *otg, bool on)
 {
+pr_info("ULPI set vbus\n");
 	struct usb_phy *phy = otg->usb_phy;
 	unsigned int flags = usb_phy_io_read(phy, ULPI_OTG_CTRL);
 
@@ -260,6 +268,7 @@ otg_ulpi_create(struct usb_phy_io_ops *ops,
 	struct usb_phy *phy;
 	struct usb_otg *otg;
 
+pr_info("ULPI create\n");
 	phy = kzalloc(sizeof(*phy), GFP_KERNEL);
 	if (!phy)
 		return NULL;

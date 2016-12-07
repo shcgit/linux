@@ -301,6 +301,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
+dev_info(&pdev->dev, "USB 1\n");
 	data->ci_pdev = ci_hdrc_add_device(&pdev->dev,
 				pdev->resource, pdev->num_resources,
 				&pdata);
@@ -312,12 +313,14 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
+dev_info(&pdev->dev, "USB 2\n");
 	ret = imx_usbmisc_init_post(data->usbmisc_data);
 	if (ret) {
 		dev_err(&pdev->dev, "usbmisc post failed, ret=%d\n", ret);
 		goto disable_device;
 	}
 
+dev_info(&pdev->dev, "USB 3\n");
 	if (data->supports_runtime_pm) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);

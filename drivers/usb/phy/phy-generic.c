@@ -67,6 +67,7 @@ static void nop_reset(struct usb_phy_generic *nop)
 	if (!nop->gpiod_reset)
 		return;
 
+pr_info("PHY nop reset\n");
 	gpiod_set_value(nop->gpiod_reset, 1);
 	usleep_range(10000, 20000);
 	gpiod_set_value(nop->gpiod_reset, 0);
@@ -82,6 +83,7 @@ static void nop_set_vbus_draw(struct usb_phy_generic *nop, unsigned mA)
 	if (!vbus_draw)
 		return;
 
+pr_info("PHY vbus draw\n");
 	enabled = nop->vbus_draw_enabled;
 	if (mA) {
 		regulator_set_current_limit(vbus_draw, 0, 1000 * mA);
@@ -109,6 +111,7 @@ static irqreturn_t nop_gpio_vbus_thread(int irq, void *data)
 	struct usb_otg *otg = nop->phy.otg;
 	int vbus, status;
 
+pr_info("PHY nop vbus\n");
 	vbus = gpiod_get_value(nop->gpiod_vbus);
 	if ((vbus ^ nop->vbus) == 0)
 		return IRQ_HANDLED;
@@ -142,6 +145,7 @@ int usb_gen_phy_init(struct usb_phy *phy)
 	struct usb_phy_generic *nop = dev_get_drvdata(phy->dev);
 	int ret;
 
+pr_info("PHY init\n");
 	if (!IS_ERR(nop->vcc)) {
 		if (regulator_enable(nop->vcc))
 			dev_err(phy->dev, "Failed to enable power\n");
@@ -163,6 +167,7 @@ void usb_gen_phy_shutdown(struct usb_phy *phy)
 {
 	struct usb_phy_generic *nop = dev_get_drvdata(phy->dev);
 
+pr_info("PHY set shdwn\n");
 	gpiod_set_value(nop->gpiod_reset, 1);
 
 	if (!IS_ERR(nop->clk))
@@ -185,6 +190,7 @@ static int nop_set_peripheral(struct usb_otg *otg, struct usb_gadget *gadget)
 		return -ENODEV;
 	}
 
+pr_info("PHY set periph\n");
 	otg->gadget = gadget;
 	if (otg->state == OTG_STATE_B_PERIPHERAL)
 		atomic_notifier_call_chain(&otg->usb_phy->notifier,
@@ -214,6 +220,7 @@ int usb_phy_gen_create_phy(struct device *dev, struct usb_phy_generic *nop,
 	enum usb_phy_type type = USB_PHY_TYPE_USB2;
 	int err = 0;
 
+dev_info(dev, "PHY create 1\n");
 	u32 clk_rate = 0;
 	bool needs_vcc = false;
 
@@ -295,6 +302,7 @@ int usb_phy_gen_create_phy(struct device *dev, struct usb_phy_generic *nop,
 	nop->phy.otg->set_host		= nop_set_host;
 	nop->phy.otg->set_peripheral	= nop_set_peripheral;
 
+dev_info(dev, "PHY create 2\n");
 	return 0;
 }
 EXPORT_SYMBOL_GPL(usb_phy_gen_create_phy);
@@ -305,6 +313,7 @@ static int usb_phy_generic_probe(struct platform_device *pdev)
 	struct usb_phy_generic	*nop;
 	int err;
 
+dev_info(&pdev->dev, "PHY probe 1\n");
 	nop = devm_kzalloc(dev, sizeof(*nop), GFP_KERNEL);
 	if (!nop)
 		return -ENOMEM;
@@ -337,6 +346,7 @@ static int usb_phy_generic_probe(struct platform_device *pdev)
 		return err;
 	}
 
+dev_info(&pdev->dev, "PHY probe 2\n");
 	platform_set_drvdata(pdev, nop);
 
 	return 0;
