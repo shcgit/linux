@@ -299,11 +299,8 @@ static void hw_phymode_configure(struct ci_hdrc *ci)
 		lpm = DEVLC_PTS(PTS_UTMI) | DEVLC_PTW;
 		break;
 	case USBPHY_INTERFACE_MODE_ULPI:
-pr_info("hw_phymode_configure 1\n");
 		portsc = PORTSC_PTS(PTS_ULPI);
-pr_info("hw_phymode_configure 2\n");
 		lpm = DEVLC_PTS(PTS_ULPI);
-pr_info("hw_phymode_configure 3\n");
 		break;
 	case USBPHY_INTERFACE_MODE_SERIAL:
 		portsc = PORTSC_PTS(PTS_SERIAL);
@@ -319,19 +316,14 @@ pr_info("hw_phymode_configure 3\n");
 	}
 
 	if (ci->hw_bank.lpm) {
-pr_info("hw_phymode_configure 4.1\n");
 		hw_write(ci, OP_DEVLC, DEVLC_PTS(7) | DEVLC_PTW, lpm);
-pr_info("hw_phymode_configure 5.1\n");
 		if (sts)
 			hw_write(ci, OP_DEVLC, DEVLC_STS, DEVLC_STS);
 	} else {
-pr_info("hw_phymode_configure 4.2\n");
 		hw_write(ci, OP_PORTSC, PORTSC_PTS(7) | PORTSC_PTW, portsc);
-pr_info("hw_phymode_configure 5.2\n");
 		if (sts)
 			hw_write(ci, OP_PORTSC, PORTSC_STS, PORTSC_STS);
 	}
-pr_info("hw_phymode_configure 6\n");
 }
 
 /**
@@ -400,11 +392,8 @@ static int ci_usb_phy_init(struct ci_hdrc *ci)
 		break;
 	case USBPHY_INTERFACE_MODE_ULPI:
 	case USBPHY_INTERFACE_MODE_SERIAL:
-pr_info("ci_usb_phy_init 1\n");
 		hw_phymode_configure(ci);
-pr_info("ci_usb_phy_init 2\n");
 		ret = _ci_usb_phy_init(ci);
-pr_info("ci_usb_phy_init 3 %i\n",ret);
 		if (ret)
 			return ret;
 		break;
@@ -829,7 +818,6 @@ struct platform_device *ci_hdrc_add_device(struct device *dev,
 	struct platform_device *pdev;
 	int id, ret;
 
-dev_info(dev, "ci_add 1\n");
 	ret = ci_get_platdata(dev, platdata);
 	if (ret)
 		return ERR_PTR(ret);
@@ -861,7 +849,6 @@ dev_info(dev, "ci_add 1\n");
 	if (ret)
 		goto err;
 
-dev_info(dev, "ci_add 2\n");
 	return pdev;
 
 err:
@@ -963,7 +950,6 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 			ci->usb_phy = NULL;
 	}
 
-dev_info(&pdev->dev, "ci_hdrc probe 0\n");
 	ret = ci_usb_phy_init(ci);
 	if (ret) {
 		dev_err(dev, "unable to init phy: %d\n", ret);
@@ -972,7 +958,6 @@ dev_info(&pdev->dev, "ci_hdrc probe 0\n");
 
 	ci->hw_bank.phys = res->start;
 
-dev_info(&pdev->dev, "ci_hdrc probe 1\n");
 	ci->irq = platform_get_irq(pdev, 0);
 	if (ci->irq < 0) {
 		dev_err(dev, "missing IRQ\n");
@@ -980,10 +965,8 @@ dev_info(&pdev->dev, "ci_hdrc probe 1\n");
 		goto deinit_phy;
 	}
 
-dev_info(&pdev->dev, "ci_hdrc probe 2\n");
 	ci_get_otg_capable(ci);
 
-dev_info(&pdev->dev, "ci_hdrc probe 3\n");
 	dr_mode = ci->platdata->dr_mode;
 	/* initialize role(s) before the interrupt is requested */
 	if (dr_mode == USB_DR_MODE_OTG || dr_mode == USB_DR_MODE_HOST) {
@@ -992,7 +975,6 @@ dev_info(&pdev->dev, "ci_hdrc probe 3\n");
 			dev_info(dev, "doesn't support host\n");
 	}
 
-dev_info(&pdev->dev, "ci_hdrc probe 4\n");
 	if (dr_mode == USB_DR_MODE_OTG || dr_mode == USB_DR_MODE_PERIPHERAL) {
 		ret = ci_hdrc_gadget_init(ci);
 		if (ret)
@@ -1013,7 +995,6 @@ dev_info(&pdev->dev, "ci_hdrc probe 4\n");
 		}
 	}
 
-dev_info(&pdev->dev, "ci_hdrc probe 5\n");
 	if (ci->roles[CI_ROLE_HOST] && ci->roles[CI_ROLE_GADGET]) {
 		if (ci->is_otg) {
 			ci->role = ci_otg_role(ci);
@@ -1046,7 +1027,6 @@ dev_info(&pdev->dev, "ci_hdrc probe 5\n");
 		}
 	}
 
-dev_info(&pdev->dev, "ci_hdrc probe 6\n");
 	platform_set_drvdata(pdev, ci);
 	ret = devm_request_irq(dev, ci->irq, ci_irq, IRQF_SHARED,
 			ci->platdata->name, ci);
@@ -1057,7 +1037,6 @@ dev_info(&pdev->dev, "ci_hdrc probe 6\n");
 	if (ret)
 		goto stop;
 
-dev_info(&pdev->dev, "ci_hdrc probe 7\n");
 	if (ci->supports_runtime_pm) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
@@ -1071,9 +1050,7 @@ dev_info(&pdev->dev, "ci_hdrc probe 7\n");
 
 	device_set_wakeup_capable(&pdev->dev, true);
 
-dev_info(&pdev->dev, "ci_hdrc probe 8\n");
 	ret = dbg_create_files(ci);
-dev_info(&pdev->dev, "ci_hdrc probe 9 %i\n", ret);
 	if (!ret)
 		return 0;
 

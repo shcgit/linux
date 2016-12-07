@@ -29,7 +29,6 @@
 
 static int ulpi_viewport_wait(void __iomem *view, u32 mask)
 {
-pr_info("ULPI viewport wait\n");
 	unsigned long usec = 2000;
 
 	while (usec--) {
@@ -44,7 +43,6 @@ pr_info("ULPI viewport wait\n");
 
 static int ulpi_viewport_read(struct usb_phy *otg, u32 reg)
 {
-pr_info("ULPI viewport read\n");
 	int ret;
 	void __iomem *view = otg->io_priv;
 
@@ -63,7 +61,6 @@ pr_info("ULPI viewport read\n");
 
 static int ulpi_viewport_write(struct usb_phy *otg, u32 val, u32 reg)
 {
-pr_info("ULPI viewport write\n");
 	int ret;
 	void __iomem *view = otg->io_priv;
 
