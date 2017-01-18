@@ -215,30 +215,30 @@ static const struct sccnxp_chip sc68692 = {
 	.fifosize	= 3,
 };
 
-static inline u8 sccnxp_read(struct uart_port *port, u8 reg)
+static u8 sccnxp_read(struct uart_port *port, u8 reg)
 {
-	return readb(port->membase + (reg << port->regshift));
-}
+	u8 ret = readb(port->membase + (reg << port->regshift));
 
-static inline void sccnxp_write(struct uart_port *port, u8 reg, u8 v)
-{
-	writeb(v, port->membase + (reg << port->regshift));
-}
-
-static inline u8 sccnxp_port_read(struct uart_port *port, u8 reg)
-{
-	u8 ret = sccnxp_read(port, (port->line << 3) + reg);
-
-	ndelay(17);
+	udelay(100);
 
 	return ret;
 }
 
-static inline void sccnxp_port_write(struct uart_port *port, u8 reg, u8 v)
+static void sccnxp_write(struct uart_port *port, u8 reg, u8 v)
+{
+	writeb(v, port->membase + (reg << port->regshift));
+
+	udelay(100);
+}
+
+static u8 sccnxp_port_read(struct uart_port *port, u8 reg)
+{
+	return sccnxp_read(port, (port->line << 3) + reg);
+}
+
+static void sccnxp_port_write(struct uart_port *port, u8 reg, u8 v)
 {
 	sccnxp_write(port, (port->line << 3) + reg, v);
-
-	ndelay(17);
 }
 
 static int sccnxp_update_best_err(int a, int b, int *besterr)
