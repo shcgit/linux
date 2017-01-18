@@ -1331,7 +1331,7 @@ config MFD_TPS80031
 	  Power Path from USB, 32K clock generator.
 
 config MFD_TW28XX
-	bool "Techwell/Intersil TW28xx Audio/Video-MUX support"
+	bool "Techwell/Intersil TW28xx Audio/Video MUX support"
 	depends on I2C
 	select REGMAP_I2C
 	help

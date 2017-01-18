@@ -146,6 +146,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_TPA6130A2 if I2C
 	select SND_SOC_TLV320DAC33 if I2C
 	select SND_SOC_TS3A227E if I2C
+	select SND_SOC_TW28XX if MFD_TW28XX
 	select SND_SOC_TWL4030 if TWL4030_CORE
 	select SND_SOC_TWL6040 if TWL6040_CORE
 	select SND_SOC_UDA134X
@@ -861,6 +862,10 @@ config SND_SOC_TLV320DAC33
 config SND_SOC_TS3A227E
 	tristate "TI Headset/Mic detect and keypress chip"
 	depends on I2C
+
+config SND_SOC_TW28XX
+	tristate "Techwell/Intersil TW28xx Audio CODEC"
+	depends on MFD_TW28XX
 
 config SND_SOC_TWL4030
 	select MFD_TWL4030_AUDIO
