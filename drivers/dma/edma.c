@@ -2294,15 +2294,19 @@ static int edma_probe(struct platform_device *pdev)
 		ecc->ccint = irq;
 	}
 
+pr_info("================ 3\n");
 	irq = platform_get_irq_byname(pdev, "edma3_ccerrint");
 	if (irq < 0 && node)
 		irq = irq_of_parse_and_map(node, 2);
 
+pr_info("================ 3.1\n");
 	if (irq >= 0) {
 		irq_name = devm_kasprintf(dev, GFP_KERNEL, "%s_ccerrint",
 					  dev_name(dev));
+pr_info("================ 3.2 %u %s\n",irq,irq_name);
 		ret = devm_request_irq(dev, irq, dma_ccerr_handler, 0, irq_name,
 				       ecc);
+pr_info("================ 3.3\n");
 		if (ret) {
 			dev_err(dev, "CCERRINT (%d) failed --> %d\n", irq, ret);
 			return ret;
@@ -2310,6 +2314,7 @@ static int edma_probe(struct platform_device *pdev)
 		ecc->ccerrint = irq;
 	}
 
+pr_info("================ 4\n");
 	ecc->dummy_slot = edma_alloc_slot(ecc, EDMA_SLOT_ANY);
 	if (ecc->dummy_slot < 0) {
 		dev_err(dev, "Can't allocate PaRAM dummy slot\n");
@@ -2318,7 +2323,9 @@ static int edma_probe(struct platform_device *pdev)
 
 	queue_priority_mapping = info->queue_priority_mapping;
 
+pr_info("================ 4.1\n");
 	if (!ecc->legacy_mode) {
+pr_info("================ 4.2\n");
 		int lowest_priority = 0;
 		struct of_phandle_args tc_args;
 
@@ -2343,6 +2350,7 @@ static int edma_probe(struct platform_device *pdev)
 		}
 	}
 
+pr_info("================ 5\n");
 	/* Event queue priority mapping */
 	for (i = 0; queue_priority_mapping[i][0] != -1; i++)
 		edma_assign_priority_to_queue(ecc, queue_priority_mapping[i][0],
@@ -2355,6 +2363,7 @@ static int edma_probe(struct platform_device *pdev)
 	}
 	ecc->info = info;
 
+pr_info("================ 6\n");
 	/* Init the dma device and channels */
 	edma_dma_init(ecc, legacy_mode);
 
@@ -2376,6 +2385,7 @@ static int edma_probe(struct platform_device *pdev)
 		goto err_reg1;
 	}
 
+pr_info("================ 7\n");
 	if (ecc->dma_memcpy) {
 		ret = dma_async_device_register(ecc->dma_memcpy);
 		if (ret) {
