@@ -1,7 +1,7 @@
 /*
  *  Maxim (Dallas) MAX3107/8/9, MAX14830 serial driver
  *
- *  Copyright (C) 2012-2017 Alexander Shiyan <shc_work@mail.ru>
+ *  Copyright (C) 2012-2016 Alexander Shiyan <shc_work@mail.ru>
  *
  *  Based on max3100.c, by Christian Pellegrin <chripell@evolware.org>
  *  Based on max3110.c, by Feng Tang <feng.tang@intel.com>
@@ -257,18 +257,16 @@ struct max310x_devtype {
 
 struct max310x_one {
 	struct uart_port	port;
-	struct kthread_work	tx_work;
-	struct kthread_work	md_work;
-	struct kthread_work	rs_work;
+	struct work_struct	tx_work;
+	struct work_struct	md_work;
+	struct work_struct	rs_work;
 };
 
 struct max310x_port {
 	struct max310x_devtype	*devtype;
 	struct regmap		*regmap;
+	struct mutex		mutex;
 	struct clk		*clk;
-	struct kthread_worker	kworker;
-	struct task_struct	*kworker_task;
-	struct kthread_work	irq_work;
 #ifdef CONFIG_GPIOLIB
 	struct gpio_chip	gpio;
 #endif
@@ -667,8 +665,6 @@ static void max310x_handle_tx(struct uart_port *port)
 		return;
 	}
 
-if (port->line==1)
-pr_info("Pend: %u, Empty: %u, Stopped: %u\n", uart_circ_chars_pending(xmit), uart_circ_empty(xmit), uart_tx_stopped(port));
 	if (uart_circ_empty(xmit) || uart_tx_stopped(port))
 		return;
 
@@ -678,8 +674,6 @@ pr_info("Pend: %u, Empty: %u, Stopped: %u\n", uart_circ_chars_pending(xmit), uar
 		/* Limit to size of TX FIFO */
 		txlen = max310x_port_read(port, MAX310X_TXFIFOLVL_REG);
 		txlen = port->fifosize - txlen;
-if (port->line==1)
-pr_info("Pend: %u, FIFO: %u, Send: %u\n", to_send, txlen, (to_send > txlen) ? txlen : to_send);
 		to_send = (to_send > txlen) ? txlen : to_send;
 
 		/* Add data to send */
@@ -707,8 +701,6 @@ static void max310x_port_irq(struct max310x_port *s, int portno)
 		rxlen = max310x_port_read(port, MAX310X_RXFIFOLVL_REG);
 		if (!ists && !rxlen)
 			break;
-if (port->line==1)
-pr_info("IRQ: 0x%02x, RX: %u\n", ists, rxlen);
 
 		if (ists & MAX310X_IRQ_CTS_BIT) {
 			lsr = max310x_port_read(port, MAX310X_LSR_IRQSTS_REG);
@@ -717,14 +709,17 @@ pr_info("IRQ: 0x%02x, RX: %u\n", ists, rxlen);
 		}
 		if (rxlen)
 			max310x_handle_rx(port, rxlen);
-		if (ists & (MAX310X_IRQ_TXEMPTY_BIT | MAX310X_IRQ_TXFIFO_BIT))
+		if (ists & MAX310X_IRQ_TXEMPTY_BIT) {
+			mutex_lock(&s->mutex);
 			max310x_handle_tx(port);
+			mutex_unlock(&s->mutex);
+		}
 	} while (1);
 }
 
-static void max310x_irq_proc(struct kthread_work *ws)
+static irqreturn_t max310x_ist(int irq, void *dev_id)
 {
-	struct max310x_port *s = container_of(ws, struct max310x_port, irq_work);
+	struct max310x_port *s = (struct max310x_port *)dev_id;
 
 	if (s->devtype->nr > 1) {
 		do {
@@ -739,30 +734,26 @@ static void max310x_irq_proc(struct kthread_work *ws)
 		} while (1);
 	} else
 		max310x_port_irq(s, 0);
-}
-
-static irqreturn_t max310x_irq(int irq, void *dev_id)
-{
-	struct max310x_port *s = (struct max310x_port *)dev_id;
-
-	kthread_queue_work(&s->kworker, &s->irq_work);
 
 	return IRQ_HANDLED;
 }
 
-static void max310x_tx_proc(struct kthread_work *ws)
+static void max310x_wq_proc(struct work_struct *ws)
 {
 	struct max310x_one *one = container_of(ws, struct max310x_one, tx_work);
+	struct max310x_port *s = dev_get_drvdata(one->port.dev);
 
+	mutex_lock(&s->mutex);
 	max310x_handle_tx(&one->port);
+	mutex_unlock(&s->mutex);
 }
 
 static void max310x_start_tx(struct uart_port *port)
 {
-	struct max310x_port *s = dev_get_drvdata(port->dev);
 	struct max310x_one *one = container_of(port, struct max310x_one, port);
 
-	kthread_queue_work(&s->kworker, &one->tx_work);
+	if (!work_pending(&one->tx_work))
+		schedule_work(&one->tx_work);
 }
 
 static unsigned int max310x_tx_empty(struct uart_port *port)
@@ -783,7 +774,7 @@ static unsigned int max310x_get_mctrl(struct uart_port *port)
 	return TIOCM_DSR | TIOCM_CAR;
 }
 
-static void max310x_md_proc(struct kthread_work *ws)
+static void max310x_md_proc(struct work_struct *ws)
 {
 	struct max310x_one *one = container_of(ws, struct max310x_one, md_work);
 
@@ -796,9 +787,8 @@ static void max310x_md_proc(struct kthread_work *ws)
 static void max310x_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	struct max310x_one *one = container_of(port, struct max310x_one, port);
-	struct max310x_port *s = dev_get_drvdata(port->dev);
 
-	kthread_queue_work(&s->kworker, &one->md_work);
+	schedule_work(&one->md_work);
 }
 
 static void max310x_break_ctl(struct uart_port *port, int break_state)
@@ -892,7 +882,7 @@ static void max310x_set_termios(struct uart_port *port,
 	uart_update_timeout(port, termios->c_cflag, baud);
 }
 
-static void max310x_rs_proc(struct kthread_work *ws)
+static void max310x_rs_proc(struct work_struct *ws)
 {
 	struct max310x_one *one = container_of(ws, struct max310x_one, rs_work);
 	unsigned int val;
@@ -920,7 +910,6 @@ static int max310x_rs485_config(struct uart_port *port,
 				struct serial_rs485 *rs485)
 {
 	struct max310x_one *one = container_of(port, struct max310x_one, port);
-	struct max310x_port *s = dev_get_drvdata(port->dev);
 
 	if ((rs485->delay_rts_before_send > 0x0f) ||
 	    (rs485->delay_rts_after_send > 0x0f))
@@ -930,7 +919,7 @@ static int max310x_rs485_config(struct uart_port *port,
 	memset(rs485->padding, 0, sizeof(rs485->padding));
 	port->rs485 = *rs485;
 
-	kthread_queue_work(&s->kworker, &one->rs_work);
+	schedule_work(&one->rs_work);
 
 	return 0;
 }
@@ -957,16 +946,12 @@ static int max310x_startup(struct uart_port *port)
 	max310x_port_write(port, MAX310X_FLOWLVL_REG,
 			   MAX310X_FLOWLVL_RES(48) | MAX310X_FLOWLVL_HALT(96));
 
-	/* Configure FIFO interrupt trigger level */
-	max310x_port_write(port, MAX310X_FIFOTRIGLVL_REG, 0x88);
-
 	/* Clear IRQ status register */
 	max310x_port_read(port, MAX310X_IRQSTS_REG);
 
 	/* Enable RX, TX, CTS change interrupts */
 	val = MAX310X_IRQ_RXEMPTY_BIT | MAX310X_IRQ_TXEMPTY_BIT;
-	val |= MAX310X_IRQ_TXFIFO_BIT | MAX310X_IRQ_CTS_BIT;
-	max310x_port_write(port, MAX310X_IRQEN_REG, val);
+	max310x_port_write(port, MAX310X_IRQEN_REG, val | MAX310X_IRQ_CTS_BIT);
 
 	return 0;
 }
@@ -978,7 +963,6 @@ static void max310x_shutdown(struct uart_port *port)
 	/* Disable all interrupts */
 	max310x_port_write(port, MAX310X_IRQEN_REG, 0);
 
-	kthread_flush_worker(&s->kworker);
 	s->devtype->power(port, 0);
 }
 
@@ -1111,7 +1095,6 @@ static int max310x_gpio_direction_output(struct gpio_chip *chip,
 static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 			 struct regmap *regmap, int irq, unsigned long flags)
 {
-	struct sched_param sched_param = { .sched_priority = MAX_RT_PRIO / 2 };
 	int i, ret, fmin, fmax, freq, uartclk;
 	struct clk *clk_osc, *clk_xtal;
 	struct max310x_port *s;
@@ -1190,16 +1173,6 @@ static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 	uartclk = max310x_set_ref_clk(s, freq, xtal);
 	dev_dbg(dev, "Reference clock set to %i Hz\n", uartclk);
 
-	kthread_init_worker(&s->kworker);
-	kthread_init_work(&s->irq_work, max310x_irq_proc);
-	s->kworker_task = kthread_run(kthread_worker_fn, &s->kworker,
-				      dev_name(dev));
-	if (IS_ERR(s->kworker_task)) {
-		ret = PTR_ERR(s->kworker_task);
-		goto out_clk;
-	}
-	sched_setscheduler(s->kworker_task, SCHED_FIFO, &sched_param);
-
 #ifdef CONFIG_GPIOLIB
 	/* Setup GPIO cotroller */
 	s->gpio.owner		= THIS_MODULE;
@@ -1214,8 +1187,10 @@ static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 	s->gpio.can_sleep	= 1;
 	ret = devm_gpiochip_add_data(dev, &s->gpio, s);
 	if (ret)
-		goto out_thread;
+		goto out_clk;
 #endif
+
+	mutex_init(&s->mutex);
 
 	for (i = 0; i < devtype->nr; i++) {
 		unsigned int line;
@@ -1248,11 +1223,11 @@ static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 				    MAX310X_MODE1_IRQSEL_BIT,
 				    MAX310X_MODE1_IRQSEL_BIT);
 		/* Initialize queue for start TX */
-		kthread_init_work(&s->p[i].tx_work, max310x_tx_proc);
+		INIT_WORK(&s->p[i].tx_work, max310x_wq_proc);
 		/* Initialize queue for changing LOOPBACK mode */
-		kthread_init_work(&s->p[i].md_work, max310x_md_proc);
+		INIT_WORK(&s->p[i].md_work, max310x_md_proc);
 		/* Initialize queue for changing RS485 mode */
-		kthread_init_work(&s->p[i].rs_work, max310x_rs_proc);
+		INIT_WORK(&s->p[i].rs_work, max310x_rs_proc);
 
 		/* Register port */
 		ret = uart_add_one_port(&max310x_uart, &s->p[i].port);
@@ -1267,7 +1242,8 @@ static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 	}
 
 	/* Setup interrupt */
-	ret = devm_request_irq(dev, irq, max310x_irq, flags, dev_name(dev), s);
+	ret = devm_request_threaded_irq(dev, irq, NULL, max310x_ist,
+					IRQF_ONESHOT | flags, dev_name(dev), s);
 	if (!ret)
 		return 0;
 
@@ -1281,8 +1257,7 @@ out_uart:
 		}
 	}
 
-out_thread:
-	kthread_stop(s->kworker_task);
+	mutex_destroy(&s->mutex);
 
 out_clk:
 	clk_disable_unprepare(s->clk);
@@ -1296,13 +1271,15 @@ static int max310x_remove(struct device *dev)
 	int i;
 
 	for (i = 0; i < s->devtype->nr; i++) {
+		cancel_work_sync(&s->p[i].tx_work);
+		cancel_work_sync(&s->p[i].md_work);
+		cancel_work_sync(&s->p[i].rs_work);
 		uart_remove_one_port(&max310x_uart, &s->p[i].port);
 		clear_bit(s->p[i].port.line, max310x_lines);
 		s->devtype->power(&s->p[i].port, 0);
 	}
 
-	kthread_flush_worker(&s->kworker);
-	kthread_stop(s->kworker_task);
+	mutex_destroy(&s->mutex);
 	clk_disable_unprepare(s->clk);
 
 	return 0;
