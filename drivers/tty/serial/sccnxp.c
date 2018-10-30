@@ -215,20 +215,22 @@ static const struct sccnxp_chip sc68692 = {
 	.fifosize	= 3,
 };
 
-static u8 sccnxp_read(struct uart_port *port, u8 reg)
+static inline u8 sccnxp_read(struct uart_port *port, u8 reg)
 {
 	u8 ret = readb(port->membase + (reg << port->regshift));
 
-	udelay(100);
+//	udelay(100);
+	barrier();
 
 	return ret;
 }
 
-static void sccnxp_write(struct uart_port *port, u8 reg, u8 v)
+static inline void sccnxp_write(struct uart_port *port, u8 reg, u8 v)
 {
 	writeb(v, port->membase + (reg << port->regshift));
 
-	udelay(100);
+//	udelay(100);
+	barrier();
 }
 
 static u8 sccnxp_port_read(struct uart_port *port, u8 reg)
@@ -375,21 +377,19 @@ static void sccnxp_handle_rx(struct uart_port *port)
 		flag = TTY_NORMAL;
 
 		if (unlikely(sr)) {
-			if (sr & SR_BRK) {
-				port->icount.brk++;
+			if (sr & SR_OVR) {
+				port->icount.overrun++;
+				/* Reset overrun error bit */
 				sccnxp_port_write(port, SCCNXP_CR_REG,
-						  CR_CMD_BREAK_RESET);
+						  CR_CMD_STATUS_RESET);
+			} else if (sr & SR_BRK) {
+				port->icount.brk++;
 				if (uart_handle_break(port))
 					continue;
 			} else if (sr & SR_PE)
 				port->icount.parity++;
 			else if (sr & SR_FE)
 				port->icount.frame++;
-			else if (sr & SR_OVR) {
-				port->icount.overrun++;
-				sccnxp_port_write(port, SCCNXP_CR_REG,
-						  CR_CMD_STATUS_RESET);
-			}
 
 			sr &= port->read_status_mask;
 			if (sr & SR_BRK)
