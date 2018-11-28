@@ -44,7 +44,9 @@
 #define DRIVER_VERSION	"2.2"
 
 static struct microcode_ops	*microcode_ops;
-static bool dis_ucode_ldr;
+static bool dis_ucode_ldr = true;
+
+bool initrd_gone;
 
 LIST_HEAD(microcode_cache);
 
@@ -76,6 +78,7 @@ struct cpu_info_ctx {
 static bool __init check_loader_disabled_bsp(void)
 {
 	static const char *__dis_opt_str = "dis_ucode_ldr";
+	u32 a, b, c, d;
 
 #ifdef CONFIG_X86_32
 	const char *cmdline = (const char *)__pa_nodebug(boot_command_line);
@@ -88,8 +91,23 @@ static bool __init check_loader_disabled_bsp(void)
 	bool *res = &dis_ucode_ldr;
 #endif
 
-	if (cmdline_find_option_bool(cmdline, option))
-		*res = true;
+	if (!have_cpuid_p())
+		return *res;
+
+	a = 1;
+	c = 0;
+	native_cpuid(&a, &b, &c, &d);
+
+	/*
+	 * CPUID(1).ECX[31]: reserved for hypervisor use. This is still not
+	 * completely accurate as xen pv guests don't see that CPUID bit set but
+	 * that's good enough as they don't land on the BSP path anyway.
+	 */
+	if (c & BIT(31))
+		return *res;
+
+	if (cmdline_find_option_bool(cmdline, option) <= 0)
+		*res = false;
 
 	return *res;
 }
@@ -119,9 +137,6 @@ void __init load_ucode_bsp(void)
 	unsigned int family;
 
 	if (check_loader_disabled_bsp())
-		return;
-
-	if (!have_cpuid_p())
 		return;
 
 	vendor = x86_cpuid_vendor();
@@ -157,9 +172,6 @@ void load_ucode_ap(void)
 	if (check_loader_disabled_ap())
 		return;
 
-	if (!have_cpuid_p())
-		return;
-
 	vendor = x86_cpuid_vendor();
 	family = x86_cpuid_family();
 
@@ -180,21 +192,24 @@ void load_ucode_ap(void)
 static int __init save_microcode_in_initrd(void)
 {
 	struct cpuinfo_x86 *c = &boot_cpu_data;
+	int ret = -EINVAL;
 
 	switch (c->x86_vendor) {
 	case X86_VENDOR_INTEL:
 		if (c->x86 >= 6)
-			return save_microcode_in_initrd_intel();
+			ret = save_microcode_in_initrd_intel();
 		break;
 	case X86_VENDOR_AMD:
 		if (c->x86 >= 0x10)
-			return save_microcode_in_initrd_amd(c->x86);
+			ret = save_microcode_in_initrd_amd(c->x86);
 		break;
 	default:
 		break;
 	}
 
-	return -EINVAL;
+	initrd_gone = true;
+
+	return ret;
 }
 
 struct cpio_data find_microcode_in_initrd(const char *path, bool use_pa)
@@ -233,15 +248,20 @@ struct cpio_data find_microcode_in_initrd(const char *path, bool use_pa)
 # endif
 
 	/*
-	 * Did we relocate the ramdisk?
+	 * Fixup the start address: after reserve_initrd() runs, initrd_start
+	 * has the virtual address of the beginning of the initrd. It also
+	 * possibly relocates the ramdisk. In either case, initrd_start contains
+	 * the updated address so use that instead.
 	 *
-	 * So we possibly relocate the ramdisk *after* applying microcode on the
-	 * BSP so we rely on use_pa (use physical addresses) - even if it is not
-	 * absolutely correct - to determine whether we've done the ramdisk
-	 * relocation already.
+	 * initrd_gone is for the hotplug case where we've thrown out initrd
+	 * already.
 	 */
-	if (!use_pa && relocated_ramdisk)
-		start = initrd_start;
+	if (!use_pa) {
+		if (initrd_gone)
+			return (struct cpio_data){ NULL, 0, "" };
+		if (initrd_start)
+			start = initrd_start;
+	}
 
 	return find_cpio_data(path, (void *)start, size, NULL);
 #else /* !CONFIG_BLK_DEV_INITRD */

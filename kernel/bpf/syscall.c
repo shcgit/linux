@@ -12,6 +12,8 @@
 #include <linux/bpf.h>
 #include <linux/syscalls.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
+#include <linux/mmzone.h>
 #include <linux/anon_inodes.h>
 #include <linux/file.h>
 #include <linux/license.h>
@@ -47,6 +49,30 @@ static struct bpf_map *find_and_alloc_map(union bpf_attr *attr)
 void bpf_register_map_type(struct bpf_map_type_list *tl)
 {
 	list_add(&tl->list_node, &bpf_map_types);
+}
+
+void *bpf_map_area_alloc(size_t size)
+{
+	/* We definitely need __GFP_NORETRY, so OOM killer doesn't
+	 * trigger under memory pressure as we really just want to
+	 * fail instead.
+	 */
+	const gfp_t flags = __GFP_NOWARN | __GFP_NORETRY | __GFP_ZERO;
+	void *area;
+
+	if (size <= (PAGE_SIZE << PAGE_ALLOC_COSTLY_ORDER)) {
+		area = kmalloc(size, GFP_USER | flags);
+		if (area != NULL)
+			return area;
+	}
+
+	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM | flags,
+			 PAGE_KERNEL);
+}
+
+void bpf_map_area_free(void *area)
+{
+	kvfree(area);
 }
 
 int bpf_map_precharge_memlock(u32 pages)
@@ -615,19 +641,39 @@ static void free_used_maps(struct bpf_prog_aux *aux)
 	kfree(aux->used_maps);
 }
 
+int __bpf_prog_charge(struct user_struct *user, u32 pages)
+{
+	unsigned long memlock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+	unsigned long user_bufs;
+
+	if (user) {
+		user_bufs = atomic_long_add_return(pages, &user->locked_vm);
+		if (user_bufs > memlock_limit) {
+			atomic_long_sub(pages, &user->locked_vm);
+			return -EPERM;
+		}
+	}
+
+	return 0;
+}
+
+void __bpf_prog_uncharge(struct user_struct *user, u32 pages)
+{
+	if (user)
+		atomic_long_sub(pages, &user->locked_vm);
+}
+
 static int bpf_prog_charge_memlock(struct bpf_prog *prog)
 {
 	struct user_struct *user = get_current_user();
-	unsigned long memlock_limit;
+	int ret;
 
-	memlock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
-
-	atomic_long_add(prog->pages, &user->locked_vm);
-	if (atomic_long_read(&user->locked_vm) > memlock_limit) {
-		atomic_long_sub(prog->pages, &user->locked_vm);
+	ret = __bpf_prog_charge(user, prog->pages);
+	if (ret) {
 		free_uid(user);
-		return -EPERM;
+		return ret;
 	}
+
 	prog->aux->user = user;
 	return 0;
 }
@@ -636,7 +682,7 @@ static void bpf_prog_uncharge_memlock(struct bpf_prog *prog)
 {
 	struct user_struct *user = prog->aux->user;
 
-	atomic_long_sub(prog->pages, &user->locked_vm);
+	__bpf_prog_uncharge(user, prog->pages);
 	free_uid(user);
 }
 
@@ -668,17 +714,17 @@ static int bpf_prog_release(struct inode *inode, struct file *filp)
 static void bpf_prog_show_fdinfo(struct seq_file *m, struct file *filp)
 {
 	const struct bpf_prog *prog = filp->private_data;
-	char prog_digest[sizeof(prog->digest) * 2 + 1] = { };
+	char prog_tag[sizeof(prog->tag) * 2 + 1] = { };
 
-	bin2hex(prog_digest, prog->digest, sizeof(prog->digest));
+	bin2hex(prog_tag, prog->tag, sizeof(prog->tag));
 	seq_printf(m,
 		   "prog_type:\t%u\n"
 		   "prog_jited:\t%u\n"
-		   "prog_digest:\t%s\n"
+		   "prog_tag:\t%s\n"
 		   "memlock:\t%llu\n",
 		   prog->type,
 		   prog->jited,
-		   prog_digest,
+		   prog_tag,
 		   prog->pages * 1ULL << PAGE_SHIFT);
 }
 #endif
@@ -811,7 +857,7 @@ static int bpf_prog_load(union bpf_attr *attr)
 
 	err = -EFAULT;
 	if (copy_from_user(prog->insns, u64_to_user_ptr(attr->insns),
-			   prog->len * sizeof(struct bpf_insn)) != 0)
+			   bpf_prog_insn_size(prog)) != 0)
 		goto free_prog;
 
 	prog->orig_prog = NULL;
@@ -874,18 +920,22 @@ static int bpf_obj_get(const union bpf_attr *attr)
 
 #ifdef CONFIG_CGROUP_BPF
 
-#define BPF_PROG_ATTACH_LAST_FIELD attach_type
+#define BPF_PROG_ATTACH_LAST_FIELD attach_flags
 
 static int bpf_prog_attach(const union bpf_attr *attr)
 {
+	enum bpf_prog_type ptype;
 	struct bpf_prog *prog;
 	struct cgroup *cgrp;
-	enum bpf_prog_type ptype;
+	int ret;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
 	if (CHECK_ATTR(BPF_PROG_ATTACH))
+		return -EINVAL;
+
+	if (attr->attach_flags & ~BPF_F_ALLOW_OVERRIDE)
 		return -EINVAL;
 
 	switch (attr->attach_type) {
@@ -910,10 +960,13 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 		return PTR_ERR(cgrp);
 	}
 
-	cgroup_bpf_update(cgrp, prog, attr->attach_type);
+	ret = cgroup_bpf_update(cgrp, prog, attr->attach_type,
+				attr->attach_flags & BPF_F_ALLOW_OVERRIDE);
+	if (ret)
+		bpf_prog_put(prog);
 	cgroup_put(cgrp);
 
-	return 0;
+	return ret;
 }
 
 #define BPF_PROG_DETACH_LAST_FIELD attach_type
@@ -921,6 +974,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 static int bpf_prog_detach(const union bpf_attr *attr)
 {
 	struct cgroup *cgrp;
+	int ret;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
@@ -936,7 +990,7 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 		if (IS_ERR(cgrp))
 			return PTR_ERR(cgrp);
 
-		cgroup_bpf_update(cgrp, NULL, attr->attach_type);
+		ret = cgroup_bpf_update(cgrp, NULL, attr->attach_type, false);
 		cgroup_put(cgrp);
 		break;
 
@@ -944,7 +998,7 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 		return -EINVAL;
 	}
 
-	return 0;
+	return ret;
 }
 #endif /* CONFIG_CGROUP_BPF */
 

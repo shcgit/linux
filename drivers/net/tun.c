@@ -73,7 +73,7 @@
 #include <linux/uio.h>
 #include <linux/skb_array.h>
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 /* Uncomment to enable debugging */
 /* #define TUN_DEBUG 1 */
@@ -1156,7 +1156,6 @@ static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 	bool zerocopy = false;
 	int err;
 	u32 rxhash;
-	ssize_t n;
 
 	if (!(tun->dev->flags & IFF_UP))
 		return -EIO;
@@ -1166,18 +1165,18 @@ static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 			return -EINVAL;
 		len -= sizeof(pi);
 
-		n = copy_from_iter(&pi, sizeof(pi), from);
-		if (n != sizeof(pi))
+		if (!copy_from_iter_full(&pi, sizeof(pi), from))
 			return -EFAULT;
 	}
 
 	if (tun->flags & IFF_VNET_HDR) {
-		if (len < tun->vnet_hdr_sz)
-			return -EINVAL;
-		len -= tun->vnet_hdr_sz;
+		int vnet_hdr_sz = READ_ONCE(tun->vnet_hdr_sz);
 
-		n = copy_from_iter(&gso, sizeof(gso), from);
-		if (n != sizeof(gso))
+		if (len < vnet_hdr_sz)
+			return -EINVAL;
+		len -= vnet_hdr_sz;
+
+		if (!copy_from_iter_full(&gso, sizeof(gso), from))
 			return -EFAULT;
 
 		if ((gso.flags & VIRTIO_NET_HDR_F_NEEDS_CSUM) &&
@@ -1186,7 +1185,7 @@ static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 
 		if (tun16_to_cpu(tun, gso.hdr_len) > len)
 			return -EINVAL;
-		iov_iter_advance(from, tun->vnet_hdr_sz - sizeof(gso));
+		iov_iter_advance(from, vnet_hdr_sz - sizeof(gso));
 	}
 
 	if ((tun->flags & TUN_TYPE_MASK) == IFF_TAP) {
@@ -1338,7 +1337,7 @@ static ssize_t tun_put_user(struct tun_struct *tun,
 		vlan_hlen = VLAN_HLEN;
 
 	if (tun->flags & IFF_VNET_HDR)
-		vnet_hdr_sz = tun->vnet_hdr_sz;
+		vnet_hdr_sz = READ_ONCE(tun->vnet_hdr_sz);
 
 	total = skb->len + vlan_hlen + vnet_hdr_sz;
 
@@ -1363,7 +1362,7 @@ static ssize_t tun_put_user(struct tun_struct *tun,
 			return -EINVAL;
 
 		if (virtio_net_hdr_from_skb(skb, &gso,
-					    tun_is_little_endian(tun))) {
+					    tun_is_little_endian(tun), true)) {
 			struct skb_shared_info *sinfo = skb_shinfo(skb);
 			pr_err("unexpected GSO type: "
 			       "0x%x, gso_size %d, hdr_len %d\n",
