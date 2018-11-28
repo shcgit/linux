@@ -833,9 +833,12 @@ static void max310x_wq_proc(struct work_struct *ws)
 
 static unsigned int max310x_tx_empty(struct uart_port *port)
 {
-	u8 lvl = max310x_port_read(port, MAX310X_TXFIFOLVL_REG);
+	unsigned int lvl, sts;
 
-	return lvl ? 0 : TIOCSER_TEMT;
+	lvl = max310x_port_read(port, MAX310X_TXFIFOLVL_REG);
+	sts = max310x_port_read(port, MAX310X_IRQSTS_REG);
+
+	return ((sts & MAX310X_IRQ_TXEMPTY_BIT) && !lvl) ? TIOCSER_TEMT : 0;
 }
 
 static unsigned int max310x_get_mctrl(struct uart_port *port)
@@ -1163,7 +1166,6 @@ static int max310x_gpio_direction_output(struct gpio_chip *chip,
 	return 0;
 }
 
-/*
 static int max310x_gpio_set_config(struct gpio_chip *chip, unsigned int offset,
 				   unsigned long config)
 {
@@ -1184,7 +1186,6 @@ static int max310x_gpio_set_config(struct gpio_chip *chip, unsigned int offset,
 		return -ENOTSUPP;
 	}
 }
-*/
 #endif
 
 static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
@@ -1328,7 +1329,7 @@ static int max310x_probe(struct device *dev, struct max310x_devtype *devtype,
 	s->gpio.get		= max310x_gpio_get;
 	s->gpio.direction_output= max310x_gpio_direction_output;
 	s->gpio.set		= max310x_gpio_set;
-//	s->gpio.set_config	= max310x_gpio_set_config;
+	s->gpio.set_config	= max310x_gpio_set_config;
 	s->gpio.base		= -1;
 	s->gpio.ngpio		= devtype->nr * 4;
 	s->gpio.can_sleep	= 1;

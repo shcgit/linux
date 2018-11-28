@@ -16,12 +16,11 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/component.h>
-#include <linux/errno.h>
 #include <linux/module.h>
 #include <linux/i2c.h>
-#include <linux/of_device.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
+#include <linux/spinlock.h>
 #include <linux/videodev2.h>
 #include <drm/drmP.h>
 #include <drm/drm_atomic_helper.h>
@@ -39,6 +38,7 @@
 #define TVE_INT_CONT_REG	0x64
 #define TVE_STAT_REG		0x68
 #define TVE_TST_MODE_REG	0x6c
+#define TVE_MV_CONT_REG		0xdc
 
 /* TVE_COM_CONF_REG */
 #define TVE_SYNC_CH_2_EN	BIT(22)
@@ -98,7 +98,7 @@
 /* TVE_TST_MODE_REG */
 #define TVE_TVDAC_TEST_MODE_MASK	(0x7 << 0)
 
-#define TVE_CAN_VGA		BIT(0)
+#define IMX_TVE_DAC_VOLTAGE	2750000
 
 enum {
 	TVE_MODE_TVOUT,
@@ -109,6 +109,7 @@ struct imx_tve {
 	struct drm_connector connector;
 	struct drm_encoder encoder;
 	struct device *dev;
+	spinlock_t lock;	/* register lock */
 	bool enabled;
 	int mode;
 	int di_hsync_pin;
@@ -133,15 +134,29 @@ static inline struct imx_tve *enc_to_tve(struct drm_encoder *e)
 	return container_of(e, struct imx_tve, encoder);
 }
 
+static void tve_lock(void *__tve)
+__acquires(&tve->lock)
+{
+	struct imx_tve *tve = __tve;
+
+	spin_lock(&tve->lock);
+}
+
+static void tve_unlock(void *__tve)
+__releases(&tve->lock)
+{
+	struct imx_tve *tve = __tve;
+
+	spin_unlock(&tve->lock);
+}
+
 static void tve_enable(struct imx_tve *tve)
 {
-	int ret;
-
 	if (!tve->enabled) {
 		tve->enabled = true;
 		clk_prepare_enable(tve->clk);
-		ret = regmap_update_bits(tve->regmap, TVE_COM_CONF_REG,
-					 TVE_EN, TVE_EN);
+		regmap_update_bits(tve->regmap, TVE_COM_CONF_REG,
+				   TVE_EN, TVE_EN);
 	}
 
 	/* clear interrupt status register */
@@ -159,12 +174,9 @@ static void tve_enable(struct imx_tve *tve)
 
 static void tve_disable(struct imx_tve *tve)
 {
-	int ret;
-
 	if (tve->enabled) {
 		tve->enabled = false;
-		ret = regmap_update_bits(tve->regmap, TVE_COM_CONF_REG,
-					 TVE_EN, 0);
+		regmap_update_bits(tve->regmap, TVE_COM_CONF_REG, TVE_EN, 0);
 		clk_disable_unprepare(tve->clk);
 	}
 }
@@ -487,11 +499,22 @@ static int imx_tve_register(struct drm_device *drm, struct imx_tve *tve)
 	return 0;
 }
 
+static bool imx_tve_readable_reg(struct device *dev, unsigned int reg)
+{
+	return (reg % 4 == 0) && (reg <= 0xdc);
+}
+
 static struct regmap_config tve_regmap_config = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = 4,
-	.max_register = 0xc4, /* TVE_DROP_COMP_USR_CONT_REG */
+
+	.readable_reg = imx_tve_readable_reg,
+
+	.lock = tve_lock,
+	.unlock = tve_unlock,
+
+	.max_register = 0xdc,
 };
 
 static const char * const imx_tve_modes[] = {
@@ -524,6 +547,7 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 	struct imx_tve *tve;
 	struct resource *res;
 	void __iomem *base;
+	unsigned int val;
 	int irq;
 	int ret;
 
@@ -532,6 +556,7 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 		return -ENOMEM;
 
 	tve->dev = dev;
+	spin_lock_init(&tve->lock);
 
 	ddc_node = of_parse_phandle(np, "ddc-i2c-bus", 0);
 	if (ddc_node) {
@@ -540,17 +565,12 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 	}
 
 	tve->mode = of_get_tve_mode(np);
-	if (tve->mode < 0) {
-		dev_err(dev, "Mode missing or invalid\n");
-		return tve->mode;
+	if (tve->mode != TVE_MODE_VGA) {
+		dev_err(dev, "only VGA mode supported, currently\n");
+		return -EINVAL;
 	}
 
 	if (tve->mode == TVE_MODE_VGA) {
-		if (!((uintptr_t)of_device_get_match_data(dev) & TVE_CAN_VGA)) {
-			dev_err(dev, "VGA mode is not supported for this CPU\n");
-			return -ENOTSUPP;
-		}
-
 		ret = of_property_read_u32(np, "fsl,hsync-pin",
 					   &tve->di_hsync_pin);
 
@@ -573,6 +593,7 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
+	tve_regmap_config.lock_arg = tve;
 	tve->regmap = devm_regmap_init_mmio_clk(dev, "tve", base,
 						&tve_regmap_config);
 	if (IS_ERR(tve->regmap)) {
@@ -597,9 +618,8 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 
 	tve->dac_reg = devm_regulator_get(dev, "dac");
 	if (!IS_ERR(tve->dac_reg)) {
-		ret = regulator_set_voltage(tve->dac_reg, 2750000, 2750000);
-		if (ret)
-			return ret;
+		if (regulator_get_voltage(tve->dac_reg) != IMX_TVE_DAC_VOLTAGE)
+			dev_warn(dev, "dac voltage is not %d uV\n", IMX_TVE_DAC_VOLTAGE);
 		ret = regulator_enable(tve->dac_reg);
 		if (ret)
 			return ret;
@@ -622,6 +642,22 @@ static int imx_tve_bind(struct device *dev, struct device *master, void *data)
 
 	ret = tve_clk_init(tve, base);
 	if (ret < 0)
+		return ret;
+
+	ret = regmap_read(tve->regmap, TVE_COM_CONF_REG, &val);
+	if (ret < 0) {
+		dev_err(dev, "failed to read configuration register: %d\n",
+			ret);
+		return ret;
+	}
+	if (val != 0x00100000) {
+		dev_err(dev, "configuration register default value indicates this is not a TVEv2\n");
+		return -ENODEV;
+	}
+
+	/* disable cable detection for VGA mode */
+	ret = regmap_write(tve->regmap, TVE_CD_CONT_REG, 0);
+	if (ret)
 		return ret;
 
 	ret = imx_tve_register(drm, tve);
@@ -659,8 +695,8 @@ static int imx_tve_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id imx_tve_dt_ids[] = {
-	{ .compatible = "fsl,imx51-tve", .data = (const void *)(0), },
-	{ .compatible = "fsl,imx53-tve", .data = (const void *)(TVE_CAN_VGA), },
+	{ .compatible = "fsl,imx51-tve", },
+	{ .compatible = "fsl,imx53-tve", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_tve_dt_ids);
