@@ -206,18 +206,17 @@ static snd_pcm_uframes_t clps711x_pcm_ptr(struct snd_pcm_substream *substream)
 }
 
 static int clps711x_pcm_copy(struct snd_pcm_substream *substream, int channel,
-			     snd_pcm_uframes_t pos, void __user *buf,
-			     snd_pcm_uframes_t count)
+			     unsigned long pos, void __user *buf,
+			     unsigned long bytes)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
-	int sz = frames_to_bytes(substream->runtime, count);
 
-	if (copy_from_user(substream->runtime->dma_area + dai->head, buf, sz))
+	if (copy_from_user(substream->runtime->dma_area + dai->head, buf, bytes))
 		return -EFAULT;
 
 	local_fiq_disable();
-	dai->head += sz;
+	dai->head += bytes;
 	dai->head %= CLPS711X_SNDBUF_SIZE;
 	local_fiq_enable();
 
@@ -316,7 +315,7 @@ static const struct snd_pcm_ops clps711x_pcm_ops = {
 	.hw_free	= snd_pcm_lib_free_pages,
 	.trigger	= clps711x_pcm_trigger,
 	.pointer	= clps711x_pcm_ptr,
-	.copy		= clps711x_pcm_copy,
+	.copy_user	= clps711x_pcm_copy,
 };
 
 static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
