@@ -43,7 +43,7 @@ static int pata_platform_set_mode(struct ata_link *link, struct ata_device **unu
 	return 0;
 }
 
-static unsigned int pata_platform_xfer_noirq(struct ata_device *dev,
+static unsigned int pata_platform_xfer_noirq(struct ata_queued_cmd *qc,
 					     unsigned char *buf,
 					     unsigned int buflen, int rw)
 {
@@ -52,7 +52,7 @@ static unsigned int pata_platform_xfer_noirq(struct ata_device *dev,
 
 	local_irq_save(flags);
 	/* Use 16-bit transfer */
-	consumed = ata_sff_data_xfer(dev, buf, buflen, rw);
+	consumed = ata_sff_data_xfer(qc, buf, buflen, rw);
 	local_irq_restore(flags);
 
 	return consumed;
