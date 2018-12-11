@@ -450,7 +450,7 @@ static int clps711x_dai_platform_probe(struct platform_device *pdev)
 	if (ret)
 		goto out_err;
 
-	ret = snd_soc_register_platform(dev, &clps711x_soc_platform_drv);
+	ret = devm_snd_soc_register_platform(dev, &clps711x_soc_platform_drv);
 	if (!ret)
 		return 0;
 
@@ -467,8 +467,6 @@ static int clps711x_dai_platform_remove(struct platform_device *pdev)
 
 	/* Disable DAI */
 	writel(DAIR_RESERVED, dai->base + DAIR);
-
-	snd_soc_unregister_platform(&pdev->dev);
 
 	return 0;
 }
