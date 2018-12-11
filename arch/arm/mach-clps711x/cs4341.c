@@ -50,8 +50,8 @@ static const struct reg_default cs4341_reg_defaults[] = {
 
 static int cs4341_set_fmt(struct snd_soc_dai *dai, unsigned int format)
 {
-	struct snd_soc_codec *codec = dai->codec;
-	struct cs4341_priv *cs4341 = snd_soc_codec_get_drvdata(codec);
+	struct snd_soc_component *component = dai->component;
+	struct cs4341_priv *cs4341 = snd_soc_component_get_drvdata(component);
 
 	switch (format & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBS_CFS:
@@ -84,8 +84,8 @@ static int cs4341_hw_params(struct snd_pcm_substream *substream,
 			    struct snd_pcm_hw_params *params,
 			    struct snd_soc_dai *dai)
 {
-	struct snd_soc_codec *codec = dai->codec;
-	struct cs4341_priv *cs4341 = snd_soc_codec_get_drvdata(codec);
+	struct snd_soc_component *component = dai->component;
+	struct cs4341_priv *cs4341 = snd_soc_component_get_drvdata(component);
 	unsigned int mode = 0;
 	int b24 = 0;
 
@@ -96,7 +96,7 @@ static int cs4341_hw_params(struct snd_pcm_substream *substream,
 	case SNDRV_PCM_FORMAT_S16_LE:
 		break;
 	default:
-		dev_err(codec->dev, "Unsupported PCM format 0x%08x.\n",
+		dev_err(component->dev, "Unsupported PCM format 0x%08x.\n",
 			params_format(params));
 		return -EINVAL;
 	}
@@ -112,27 +112,29 @@ static int cs4341_hw_params(struct snd_pcm_substream *substream,
 		mode = b24 ? CS4341_MODE2_DIF_RJ_24 : CS4341_MODE2_DIF_RJ_16;
 		break;
 	default:
-		dev_err(codec->dev, "Unsupported DAI format 0x%08x.\n",
+		dev_err(component->dev, "Unsupported DAI format 0x%08x.\n",
 			cs4341->fmt);
 		return -EINVAL;
 	}
 
-	return regmap_update_bits(cs4341->regmap, CS4341_REG_MODE2,
-				  CS4341_MODE2_DIF, mode);
+	return snd_soc_component_update_bits(component, CS4341_REG_MODE2,
+					     CS4341_MODE2_DIF, mode);
 }
 
 static int cs4341_digital_mute(struct snd_soc_dai *dai, int mute)
 {
-	struct cs4341_priv *cs4341 = snd_soc_codec_get_drvdata(dai->codec);
+	struct snd_soc_component *component = dai->component;
 	int ret;
 
-	ret = regmap_update_bits(cs4341->regmap, CS4341_REG_VOLA,
-				 CS4341_VOLX_MUTE, mute ? CS4341_VOLX_MUTE : 0);
+	ret = snd_soc_component_update_bits(component, CS4341_REG_VOLA,
+					    CS4341_VOLX_MUTE,
+					    mute ? CS4341_VOLX_MUTE : 0);
 	if (ret < 0)
 		return ret;
 
-	return regmap_update_bits(cs4341->regmap, CS4341_REG_VOLB,
-				  CS4341_VOLX_MUTE, mute ? CS4341_VOLX_MUTE : 0);
+	return snd_soc_component_update_bits(component, CS4341_REG_VOLB,
+					     CS4341_VOLX_MUTE,
+					     mute ? CS4341_VOLX_MUTE : 0);
 }
 
 static DECLARE_TLV_DB_SCALE(out_tlv, -9000, 100, 0);
@@ -194,15 +196,17 @@ static struct snd_soc_dai_driver cs4341_dai = {
 	.ops			= &cs4341_dai_ops,
 };
 
-static struct snd_soc_codec_driver soc_codec_cs4341 = {
-	.component_driver = {
-		.dapm_widgets		= cs4341_dapm_widgets,
-		.num_dapm_widgets	= ARRAY_SIZE(cs4341_dapm_widgets),
-		.dapm_routes		= cs4341_routes,
-		.num_dapm_routes	= ARRAY_SIZE(cs4341_routes),
-		.controls		= cs4341_controls,
-		.num_controls		= ARRAY_SIZE(cs4341_controls),
-	},
+static const struct snd_soc_component_driver soc_component_cs4341 = {
+	.controls		= cs4341_controls,
+	.num_controls		= ARRAY_SIZE(cs4341_controls),
+	.dapm_widgets		= cs4341_dapm_widgets,
+	.num_dapm_widgets	= ARRAY_SIZE(cs4341_dapm_widgets),
+	.dapm_routes		= cs4341_routes,
+	.num_dapm_routes	= ARRAY_SIZE(cs4341_routes),
+//	.idle_bias_on		= 1,
+//	.use_pmdown_time	= 1,
+//	.endianness		= 1,
+//	.non_legacy_dai_naming	= 1,
 };
 
 static const struct of_device_id __maybe_unused cs4341_dt_ids[] = {
@@ -220,7 +224,8 @@ static int cs4341_probe(struct device *dev)
 		regmap_write(cs4341->regmap, cs4341_reg_defaults[i].reg,
 			     cs4341_reg_defaults[i].def);
 
-	return snd_soc_register_codec(dev, &soc_codec_cs4341, &cs4341_dai, 1);
+	return devm_snd_soc_register_component(dev, &soc_component_cs4341,
+					       &cs4341_dai, 1);
 }
 
 #if defined(CONFIG_I2C)
@@ -248,13 +253,6 @@ static int cs4341_i2c_probe(struct i2c_client *i2c,
 	return cs4341_probe(&i2c->dev);
 }
 
-static int cs4341_i2c_remove(struct i2c_client *client)
-{
-	snd_soc_unregister_codec(&client->dev);
-
-	return 0;
-}
-
 static const struct i2c_device_id cs4341_i2c_id[] = {
 	{ "cs4341", 0 },
 	{ }
@@ -267,7 +265,6 @@ static struct i2c_driver cs4341_i2c_driver = {
 		.of_match_table = of_match_ptr(cs4341_dt_ids),
 	},
 	.probe = cs4341_i2c_probe,
-	.remove = cs4341_i2c_remove,
 	.id_table = cs4341_i2c_id,
 };
 #endif
@@ -312,20 +309,12 @@ static int cs4341_spi_probe(struct spi_device *spi)
 	return cs4341_probe(&spi->dev);
 }
 
-static int cs4341_spi_remove(struct spi_device *spi)
-{
-	snd_soc_unregister_codec(&spi->dev);
-
-	return 0;
-}
-
 static struct spi_driver cs4341_spi_driver = {
 	.driver = {
 		.name = "cs4341-spi",
 		.of_match_table = of_match_ptr(cs4341_dt_ids),
 	},
 	.probe = cs4341_spi_probe,
-	.remove = cs4341_spi_remove,
 };
 #endif
 
