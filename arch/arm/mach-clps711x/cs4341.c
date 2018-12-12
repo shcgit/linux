@@ -204,7 +204,7 @@ static const struct snd_soc_component_driver soc_component_cs4341 = {
 	.dapm_routes		= cs4341_routes,
 	.num_dapm_routes	= ARRAY_SIZE(cs4341_routes),
 	.idle_bias_on		= 1,
-//	.use_pmdown_time	= 1,
+	.use_pmdown_time	= 1,
 	.endianness		= 1,
 	.non_legacy_dai_naming	= 1,
 };
