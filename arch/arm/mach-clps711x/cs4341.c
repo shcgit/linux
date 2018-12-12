@@ -203,10 +203,10 @@ static const struct snd_soc_component_driver soc_component_cs4341 = {
 	.num_dapm_widgets	= ARRAY_SIZE(cs4341_dapm_widgets),
 	.dapm_routes		= cs4341_routes,
 	.num_dapm_routes	= ARRAY_SIZE(cs4341_routes),
-//	.idle_bias_on		= 1,
+	.idle_bias_on		= 1,
 //	.use_pmdown_time	= 1,
-//	.endianness		= 1,
-//	.non_legacy_dai_naming	= 1,
+	.endianness		= 1,
+	.non_legacy_dai_naming	= 1,
 };
 
 static const struct of_device_id __maybe_unused cs4341_dt_ids[] = {
