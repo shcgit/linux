@@ -1,7 +1,7 @@
 /*
  *  Cirrus Logic CS4341A ALSA SoC Codec Driver
  *
- *  Author: Alexander Shiyan <shc_work@mail.ru>, 2016
+ *  Author: Alexander Shiyan <shc_work@mail.ru>, 2016-2018
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

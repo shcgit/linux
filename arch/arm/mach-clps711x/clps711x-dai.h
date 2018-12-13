@@ -1,7 +1,7 @@
 /*
  *  Currus Logic CLPS711X DAI definitions
  *
- *  Copyright (C) 2014 Alexander Shiyan <shc_work@mail.ru>
+ *  Author: Alexander Shiyan <shc_work@mail.ru>, 2016-2018
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,7 +1,7 @@
 /*
  *  Currus Logic CLPS711X DAI driver
  *
- *  Copyright (C) 2014 Alexander Shiyan <shc_work@mail.ru>
+ *  Author: Alexander Shiyan <shc_work@mail.ru>, 2016-2018
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@
 
 #define CLPS711X_FMTS	(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_U16_LE)
 #define CLPS711X_RATES	(SNDRV_PCM_RATE_8000_48000)
+#define DRV_NAME	"clps711x-dai"
 
 struct clps711x_dai {
 	u32				head;
@@ -156,7 +157,8 @@ static int clps711x_pcm_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
 	ret = snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(params));
@@ -179,7 +181,8 @@ static int clps711x_pcm_hw_params(struct snd_pcm_substream *substream,
 static int clps711x_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
@@ -200,7 +203,8 @@ static int clps711x_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 static snd_pcm_uframes_t clps711x_pcm_ptr(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	return bytes_to_frames(substream->runtime, dai->last_ptr);
 }
@@ -210,7 +214,8 @@ static int clps711x_pcm_copy(struct snd_pcm_substream *substream, int channel,
 			     unsigned long bytes)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	if (copy_from_user(substream->runtime->dma_area + dai->head, buf, bytes))
 		return -EFAULT;
@@ -270,7 +275,8 @@ static const struct snd_pcm_hardware clps711x_pcm_hardware = {
 static int clps711x_pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
 	atomic_set(&dai->running, 0);
@@ -299,7 +305,8 @@ static int clps711x_pcm_open(struct snd_pcm_substream *substream)
 static int clps711x_pcm_close(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	disable_irq(dai->irq);
 	hrtimer_cancel(&dai->hrt);
@@ -318,20 +325,30 @@ static const struct snd_pcm_ops clps711x_pcm_ops = {
 	.copy_user	= clps711x_pcm_copy,
 };
 
+static int clps711x_pcm_probe(struct snd_soc_component *component)
+{
+	struct platform_device *pdev = to_platform_device(component->dev);
+	struct clps711x_dai *dai = platform_get_drvdata(pdev);
+
+	snd_soc_component_set_drvdata(component, dai);
+
+	return 0;
+}
+
 static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
 {
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
-	const char *devname = dev_name(rtd->platform->dev);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
 	/* Request FIQ */
-	dai->fiq.name = devname;
+	dai->fiq.name = DRV_NAME;
 	ret = claim_fiq(&dai->fiq);
 	if (ret)
 		return ret;
 
 	/* Request FIQ interrupt */
-	ret = request_irq(dai->irq, no_action, 0, devname, NULL);
+	ret = request_irq(dai->irq, no_action, 0, DRV_NAME, NULL);
 	if (ret)
 		return ret;
 
@@ -346,7 +363,8 @@ static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
 static void clps711x_pcm_free(struct snd_pcm *pcm)
 {
 	struct snd_soc_pcm_runtime *rtd = pcm->private_data;
-	struct clps711x_dai *dai = snd_soc_platform_get_drvdata(rtd->platform);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	free_irq(dai->irq, NULL);
 
@@ -355,8 +373,10 @@ static void clps711x_pcm_free(struct snd_pcm *pcm)
 	snd_pcm_lib_preallocate_free_for_all(pcm);
 }
 
-static struct snd_soc_platform_driver clps711x_soc_platform_drv = {
+static struct snd_soc_component_driver clps711x_soc_component = {
+	.name		= DRV_NAME,
 	.ops		= &clps711x_pcm_ops,
+	.probe		= clps711x_pcm_probe,
 	.pcm_new	= clps711x_pcm_new,
 	.pcm_free	= clps711x_pcm_free,
 };
@@ -411,7 +431,7 @@ static int clps711x_dai_platform_probe(struct platform_device *pdev)
 	dai->pll_hz = clk_get_rate(clk) / 2;
 	if (!dai->pll_hz) {
 		dai64 |= DAI64FS_AUDIOCLKSRC;
-		dev_notice(dev, "External MCLK will be used only\n");
+		dev_notice(dev, "External MCLK will be used\n");
 	}
 
 	clk = devm_clk_get(dev, "mclk");
@@ -450,7 +470,8 @@ static int clps711x_dai_platform_probe(struct platform_device *pdev)
 	if (ret)
 		goto out_err;
 
-	ret = devm_snd_soc_register_platform(dev, &clps711x_soc_platform_drv);
+	ret = devm_snd_soc_register_component(dev, &clps711x_soc_component,
+					      NULL, 0);
 	if (!ret)
 		return 0;
 
@@ -479,7 +500,7 @@ MODULE_DEVICE_TABLE(of, clps711x_dai_dt_ids);
 
 static struct platform_driver clps711x_dai_platform_driver = {
 	.driver	= {
-		.name		= "clps711x-dai",
+		.name		= DRV_NAME,
 		.of_match_table	= clps711x_dai_dt_ids,
 	},
 	.probe	= clps711x_dai_platform_probe,
