@@ -415,7 +415,7 @@ static int clps711x_dai_platform_probe(struct platform_device *pdev)
 	if (dai->irq < 0)
 		return dai->irq;
 
-	syscon = syscon_regmap_lookup_by_compatible("cirrus,ep7209-syscon3");
+	syscon = syscon_regmap_lookup_by_phandle(pdev->dev.of_node, "syscon");
 	if (IS_ERR(syscon))
 		return PTR_ERR(syscon);
 
