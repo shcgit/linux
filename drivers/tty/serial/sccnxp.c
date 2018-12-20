@@ -399,6 +399,7 @@ static void sccnxp_handle_rx(struct uart_port *port)
 		sr &= SR_PE | SR_FE | SR_OVR | SR_BRK;
 
 		ch = sccnxp_port_read(port, SCCNXP_RHR_REG);
+
 		port->icount.rx++;
 		flag = TTY_NORMAL;
 
