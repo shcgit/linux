@@ -162,21 +162,20 @@ int __pata_platform_probe(struct device *dev, struct resource *io_res,
 	 * Handle the MMIO case
 	 */
 	if (mmio) {
+		ap->ioaddr.cmd_addr = devm_ioremap(dev, io_res->start,
+				resource_size(io_res));
+		ap->ioaddr.ctl_addr = devm_ioremap(dev, ctl_res->start,
+				resource_size(ctl_res));
 		ap->ioaddr.cmd_addr = devm_ioremap_resource(dev, io_res);
-		if (IS_ERR(ap->ioaddr.cmd_addr))
-			return PTR_ERR(ap->ioaddr.cmd_addr);
-		ap->ioaddr.ctl_addr = devm_ioremap_resource(dev, ctl_res);
-		if (IS_ERR(ap->ioaddr.ctl_addr))
-			return PTR_ERR(ap->ioaddr.ctl_addr);
 	} else {
 		ap->ioaddr.cmd_addr = devm_ioport_map(dev, io_res->start,
 				resource_size(io_res));
 		ap->ioaddr.ctl_addr = devm_ioport_map(dev, ctl_res->start,
 				resource_size(ctl_res));
-		if (!ap->ioaddr.cmd_addr || !ap->ioaddr.ctl_addr) {
-			dev_err(dev, "failed to map IO/CTL base\n");
-			return -ENOMEM;
-		}
+	}
+	if (!ap->ioaddr.cmd_addr || !ap->ioaddr.ctl_addr) {
+		dev_err(dev, "failed to map IO/CTL base\n");
+		return -ENOMEM;
 	}
 
 	ap->ioaddr.altstatus_addr = ap->ioaddr.ctl_addr;

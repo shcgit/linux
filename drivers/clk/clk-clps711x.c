@@ -44,21 +44,21 @@ struct clps711x_clk {
 	struct clk_hw_onecell_data	clk_data;
 };
 
-static struct clps711x_clk * __init _clps711x_clk_init(void __iomem *base,
-						       u32 fref)
+static void __init clps711x_clk_init_dt(struct device_node *np)
 {
-	u32 tmp, f_cpu, f_pll, f_bus, f_tim, f_pwm, f_spi;
+	u32 tmp, f_cpu, f_pll, f_bus, f_tim, f_pwm, f_spi, fref = 0;
 	struct clps711x_clk *clps711x_clk;
-	unsigned i;
+	void __iomem *base;
 
-	if (!base)
-		return ERR_PTR(-ENOMEM);
+	WARN_ON(of_property_read_u32(np, "startup-frequency", &fref));
+
+	base = of_iomap(np, 0);
+	BUG_ON(!base);
 
 	clps711x_clk = kzalloc(struct_size(clps711x_clk, clk_data.hws,
 					   CLPS711X_CLK_MAX),
 			       GFP_KERNEL);
-	if (!clps711x_clk)
-		return ERR_PTR(-ENOMEM);
+	BUG_ON(!clps711x_clk);
 
 	spin_lock_init(&clps711x_clk->lock);
 
@@ -137,24 +137,10 @@ static struct clps711x_clk * __init _clps711x_clk_init(void __iomem *base,
 		clk_hw_register_fixed_factor(NULL, "uart", "bus", 0, 1, 10);
 	clps711x_clk->clk_data.hws[CLPS711X_CLK_TICK] =
 		clk_hw_register_fixed_rate(NULL, "tick", NULL, 0, 64);
-	for (i = 0; i < CLPS711X_CLK_MAX; i++)
-		if (IS_ERR(clps711x_clk->clk_data.hws[i]))
+	for (tmp = 0; tmp < CLPS711X_CLK_MAX; tmp++)
+		if (IS_ERR(clps711x_clk->clk_data.hws[tmp]))
 			pr_err("clk %i: register failed with %ld\n",
-			       i, PTR_ERR(clps711x_clk->clk_data.hws[i]));
-
-	return clps711x_clk;
-}
-
-static void __init clps711x_clk_init_dt(struct device_node *np)
-{
-	void __iomem *base = of_iomap(np, 0);
-	struct clps711x_clk *clps711x_clk;
-	u32 fref = 0;
-
-	WARN_ON(of_property_read_u32(np, "startup-frequency", &fref));
-
-	clps711x_clk = _clps711x_clk_init(base, fref);
-	BUG_ON(IS_ERR(clps711x_clk));
+			       tmp, PTR_ERR(clps711x_clk->clk_data.hws[tmp]));
 
 	clps711x_clk->clk_data.num = CLPS711X_CLK_MAX;
 	of_clk_add_hw_provider(np, of_clk_hw_onecell_get,
