@@ -1,12 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  Cirrus Logic CS4341A ALSA SoC Codec Driver
- *
- *  Author: Alexander Shiyan <shc_work@mail.ru>, 2016-2018
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ *  Author: Alexander Shiyan <shc_work@mail.ru>
  */
 
 #include <linux/i2c.h>
@@ -139,14 +134,14 @@ static int cs4341_digital_mute(struct snd_soc_dai *dai, int mute)
 
 static DECLARE_TLV_DB_SCALE(out_tlv, -9000, 100, 0);
 
-static const char *deemph[] = {
-	"Disabled", "44.1 kHz", "48 kHz", "32 kHz",
+static const char * const deemph[] = {
+	"None", "44.1k", "48k", "32k",
 };
 
 static const struct soc_enum deemph_enum =
 	SOC_ENUM_SINGLE(CS4341_REG_MODE2, 2, 4, deemph);
 
-static const char *srzc[] = {
+static const char * const srzc[] = {
 	"Immediate", "Zero Cross", "Soft Ramp", "SR on ZC",
 };
 
@@ -184,7 +179,6 @@ static const struct snd_soc_dai_ops cs4341_dai_ops = {
 
 static struct snd_soc_dai_driver cs4341_dai = {
 	.name			= "cs4341a-hifi",
-	.symmetric_rates	= 1,
 	.playback		= {
 		.stream_name	= "DAC Playback",
 		.channels_min	= 1,
@@ -194,6 +188,7 @@ static struct snd_soc_dai_driver cs4341_dai = {
 				  SNDRV_PCM_FMTBIT_S24_LE,
 	},
 	.ops			= &cs4341_dai_ops,
+	.symmetric_rates	= 1,
 };
 
 static const struct snd_soc_component_driver soc_component_cs4341 = {
@@ -346,6 +341,6 @@ static void __exit cs4341_exit(void)
 }
 module_exit(cs4341_exit);
 
-MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Alexander Shiyan <shc_work@mail.ru>");
 MODULE_DESCRIPTION("Cirrus Logic CS4341 ALSA SoC Codec Driver");
+MODULE_LICENSE("GPL");

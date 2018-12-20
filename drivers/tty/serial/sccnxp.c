@@ -12,9 +12,9 @@
 #endif
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/module.h>
-#include <linux/delay.h>
 #include <linux/mod_devicetable.h>
 #include <linux/device.h>
 #include <linux/console.h>
@@ -90,8 +90,8 @@
 #define SCCNXP_CTPL_REG			(0x07)
 #define SCCNXP_IPR_REG			(0x0d)
 #define SCCNXP_OPCR_REG			SCCNXP_IPR_REG
-#define SCCNXP_START_COUNTER_REG	(0x0e)
-#define SCCNXP_SOP_REG			(SCCNXP_START_COUNTER_REG)
+#define SCCNXP_SOP_REG			(0x0e)
+#define SCCNXP_START_COUNTER_REG	(SCCNXP_SOP_REG)
 #define SCCNXP_ROP_REG			(0x0f)
 
 /* Route helpers */
@@ -110,7 +110,7 @@ struct sccnxp_chip {
 	unsigned long		freq_max;
 	unsigned int		flags;
 	unsigned int		fifosize;
-	/* HIGH time between read/write cycles */
+	/* Time between read/write cycles */
 	unsigned int		trwd;
 };
 
