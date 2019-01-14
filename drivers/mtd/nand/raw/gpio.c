@@ -219,8 +219,8 @@ static inline int gpio_nand_get_config(const struct device *dev,
 	if (!ret)
 		return ret;
 
-	if (dev->platform_data) {
-		memcpy(plat, dev->platform_data, sizeof(*plat));
+	if (dev_get_platdata(dev)) {
+		memcpy(plat, dev_get_platdata(dev), sizeof(*plat));
 		return 0;
 	}
 
