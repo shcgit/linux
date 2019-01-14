@@ -100,9 +100,12 @@ static int clps711x_keypad_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->syscon = syscon_regmap_lookup_by_phandle(np, "syscon");
+	priv->syscon = syscon_node_to_regmap(np->parent);
 	if (IS_ERR(priv->syscon))
 		return PTR_ERR(priv->syscon);
+
+//	priv->syscon =
+//		syscon_regmap_lookup_by_compatible("cirrus,ep7209-syscon1");
 
 	priv->row_count = of_gpio_named_count(np, "row-gpios");
 	if (priv->row_count < 1)
