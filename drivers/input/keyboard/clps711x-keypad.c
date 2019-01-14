@@ -91,6 +91,7 @@ static int clps711x_keypad_probe(struct platform_device *pdev)
 {
 	struct clps711x_keypad_data *priv;
 	struct device *dev = &pdev->dev;
+	struct device *parent = dev->parent;
 	struct device_node *np = dev->of_node;
 	struct input_polled_dev *poll_dev;
 	u32 poll_interval;
@@ -100,12 +101,13 @@ static int clps711x_keypad_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->syscon = syscon_node_to_regmap(np->parent);
+	if (parent && parent->of_node)
+		priv->syscon = syscon_node_to_regmap(parent->of_node);
+	else
+		priv->syscon =
+			syscon_regmap_lookup_by_compatible("cirrus,ep7209-syscon1");
 	if (IS_ERR(priv->syscon))
 		return PTR_ERR(priv->syscon);
-
-//	priv->syscon =
-//		syscon_regmap_lookup_by_compatible("cirrus,ep7209-syscon1");
 
 	priv->row_count = of_gpio_named_count(np, "row-gpios");
 	if (priv->row_count < 1)
