@@ -166,7 +166,6 @@ int __pata_platform_probe(struct device *dev, struct resource *io_res,
 				resource_size(io_res));
 		ap->ioaddr.ctl_addr = devm_ioremap(dev, ctl_res->start,
 				resource_size(ctl_res));
-		ap->ioaddr.cmd_addr = devm_ioremap_resource(dev, io_res);
 	} else {
 		ap->ioaddr.cmd_addr = devm_ioport_map(dev, io_res->start,
 				resource_size(io_res));
