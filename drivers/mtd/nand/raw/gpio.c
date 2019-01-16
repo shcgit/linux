@@ -23,7 +23,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/io.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/rawnand.h>
@@ -31,7 +31,6 @@
 #include <linux/mtd/nand-gpio.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/of_gpio.h>
 
 #define MAX_NAND_PER_CHIP	4
 
@@ -40,11 +39,11 @@ struct gpiomtd {
 	struct nand_chip	nand_chip;
 	int			chip_index;
 	struct gpio_nand_platdata plat;
-	int gpio_nce[MAX_NAND_PER_CHIP];	/* NCE */
-	int gpio_cle;				/* CLE */
-	int gpio_ale;				/* ALE */
-	int gpio_rdy[MAX_NAND_PER_CHIP];	/* RDY (Optional) */
-	int gpio_nwp;				/* NWP (Optional) */
+	struct gpio_desc *nce[MAX_NAND_PER_CHIP]; /* Optional chip enable */
+	struct gpio_desc *cle;
+	struct gpio_desc *ale;
+	struct gpio_desc *rdy[MAX_NAND_PER_CHIP];
+	struct gpio_desc *nwp; /* Optional write protection */
 };
 
 static inline struct gpiomtd *gpio_nand_getpriv(struct mtd_info *mtd)
@@ -86,10 +85,11 @@ static void gpio_nand_cmd_ctrl(struct nand_chip *chip, int cmd,
 	gpio_nand_dosync(gpiomtd);
 
 	if (ctrl & NAND_CTRL_CHANGE) {
-		gpio_set_value(gpiomtd->gpio_nce[gpiomtd->chip_index],
-			       !(ctrl & NAND_NCE));
-		gpio_set_value(gpiomtd->gpio_cle, !!(ctrl & NAND_CLE));
-		gpio_set_value(gpiomtd->gpio_ale, !!(ctrl & NAND_ALE));
+		if (gpiomtd->nce[gpiomtd->chip_index])
+			gpiod_set_value(gpiomtd->nce[gpiomtd->chip_index],
+					!(ctrl & NAND_NCE));
+		gpiod_set_value(gpiomtd->cle, !!(ctrl & NAND_CLE));
+		gpiod_set_value(gpiomtd->ale, !!(ctrl & NAND_ALE));
 		gpio_nand_dosync(gpiomtd);
 	}
 	if (cmd == NAND_CMD_NONE)
@@ -102,12 +102,9 @@ static void gpio_nand_cmd_ctrl(struct nand_chip *chip, int cmd,
 static int gpio_nand_devready(struct nand_chip *chip)
 {
 	struct gpiomtd *gpiomtd = gpio_nand_getpriv(nand_to_mtd(chip));
-	int idx = gpiomtd->chip_index;
+	int idx = gpiomtd->rdy[gpiomtd->chip_index] ? gpiomtd->chip_index : 0;
 
-	if (!gpio_is_valid(gpiomtd->gpio_rdy[idx]))
-		idx = 0;
-
-	return gpio_get_value(gpiomtd->gpio_rdy[idx]);
+	return gpiod_get_value(gpiomtd->rdy[idx]);
 }
 
 static void gpio_nand_select_chip(struct nand_chip *chip, int chipnr)
@@ -134,49 +131,23 @@ MODULE_DEVICE_TABLE(of, gpio_nand_id_table);
 static int gpio_nand_get_config_of(const struct device *dev,
 				   struct gpio_nand_platdata *plat)
 {
-	struct device_node *np = dev->of_node;
-	struct gpiomtd *gpiomtd = dev_get_drvdata(dev);
 	u32 val;
-	int i;
 
 	if (!dev->of_node)
 		return -ENODEV;
 
-//	if (!of_property_read_u32(np, "bank-width", &val)) {
-//		if (val == 2) {
-//			plat->options |= NAND_BUSWIDTH_16;
-//		} else if (val != 1) {
-//			dev_err(dev, "invalid bank-width %u\n", val);
-//			return -EINVAL;
-//		}
-//	} else {
-//		if (of_get_property(np,
-//				    "gpio-control-nand,bank-width-auto", NULL))
-//			plat->options |= NAND_BUSWIDTH_AUTO;
-//	}
-
-	if (of_find_property(np, "gpios", NULL)) {
-		dev_notice(dev, "Property \"gpios\" is deprecated");
-
-		gpiomtd->gpio_rdy[0] = of_get_gpio(np, 0);
-		gpiomtd->gpio_nce[0] = of_get_gpio(np, 1);
-		gpiomtd->gpio_ale = of_get_gpio(np, 2);
-		gpiomtd->gpio_cle = of_get_gpio(np, 3);
-		gpiomtd->gpio_nwp = of_get_gpio(np, 4);
-	} else {
-		gpiomtd->gpio_ale = of_get_named_gpio(np, "ale-gpios", 0);
-		gpiomtd->gpio_cle = of_get_named_gpio(np, "cle-gpios", 0);
-		gpiomtd->gpio_nwp = of_get_named_gpio(np, "nwp-gpios", 0);
-
-		for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
-			gpiomtd->gpio_nce[i] = of_get_named_gpio(np,
-							      "nce-gpios", i);
-			gpiomtd->gpio_rdy[i] = of_get_named_gpio(np,
-							      "rdy-gpios", i);
+	if (!of_property_read_u32(dev->of_node, "bank-width", &val)) {
+		if (val == 2) {
+			plat->options |= NAND_BUSWIDTH_16;
+		} else if (val == 0) {
+			plat->options |= NAND_BUSWIDTH_AUTO;
+		} else if (val != 1) {
+			dev_err(dev, "invalid bank-width %u\n", val);
+			return -EINVAL;
 		}
 	}
 
-	if (!of_property_read_u32(np, "chip-delay", &val))
+	if (!of_property_read_u32(dev->of_node, "chip-delay", &val))
 		plat->chip_delay = val;
 
 	return 0;
@@ -184,11 +155,15 @@ static int gpio_nand_get_config_of(const struct device *dev,
 
 static struct resource *gpio_nand_get_io_sync_of(struct platform_device *pdev)
 {
-	struct resource *r = devm_kzalloc(&pdev->dev, sizeof(*r), GFP_KERNEL);
+	struct resource *r;
 	u64 addr;
 
-	if (!r || of_property_read_u64(pdev->dev.of_node,
-				       "gpio-control-nand,io-sync-reg", &addr))
+	if (of_property_read_u64(pdev->dev.of_node,
+				 "gpio-control-nand,io-sync-reg", &addr))
+		return NULL;
+
+	r = devm_kzalloc(&pdev->dev, sizeof(*r), GFP_KERNEL);
+	if (!r)
 		return NULL;
 
 	r->start = addr;
@@ -238,12 +213,6 @@ gpio_nand_get_io_sync(struct platform_device *pdev)
 	return platform_get_resource(pdev, IORESOURCE_MEM, 1);
 }
 
-static void gpio_nand_set_wp(struct gpiomtd *gpiomtd, int val)
-{
-	if (gpio_is_valid(gpiomtd->gpio_nwp))
-		gpio_set_value(gpiomtd->gpio_nwp, val);
-}
-
 static int gpio_nand_remove(struct platform_device *pdev)
 {
 	struct gpiomtd *gpiomtd = platform_get_drvdata(pdev);
@@ -251,11 +220,13 @@ static int gpio_nand_remove(struct platform_device *pdev)
 
 	nand_release(&gpiomtd->nand_chip);
 
-	gpio_nand_set_wp(gpiomtd, 0);
+	/* Enable write protection and disable the chip */
+	if (gpiomtd->nwp)
+		gpiod_set_value(gpiomtd->nwp, 0);
 
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-		if (gpio_is_valid(gpiomtd->gpio_nce[i]))
-			gpio_set_value(gpiomtd->gpio_nce[i], 1);
+		if (gpiomtd->nce[i])
+			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return 0;
 }
@@ -298,40 +269,39 @@ static int gpio_nand_probe(struct platform_device *pdev)
 			return PTR_ERR(gpiomtd->io_sync);
 	}
 
-	ret = devm_gpio_request_one(dev, gpiomtd->gpio_ale,
-				    GPIOF_OUT_INIT_LOW, "NAND ALE");
-	if (ret)
-		return ret;
-
-	ret = devm_gpio_request_one(dev, gpiomtd->gpio_cle,
-				    GPIOF_OUT_INIT_LOW, "NAND CLE");
-	if (ret)
-		return ret;
-
-	if (gpio_is_valid(gpiomtd->gpio_nwp)) {
-		ret = devm_gpio_request_one(dev, gpiomtd->gpio_nwp,
-					    GPIOF_OUT_INIT_LOW, "NAND NWP");
-		if (ret)
-			return ret;
+	for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
+		gpiomtd->nce[i] = devm_gpiod_get_index_optional(dev, "nce", i,
+								GPIOD_OUT_HIGH);
+		if (IS_ERR(gpiomtd->nce[i]))
+			return PTR_ERR(gpiomtd->nce[i]);
+		if (!gpiomtd->nce[i])
+			break;
 	}
 
+	gpiomtd->nwp = devm_gpiod_get_optional(dev, "nwp", GPIOD_OUT_LOW);
+	if (IS_ERR(gpiomtd->nwp))
+		return PTR_ERR(gpiomtd->nwp);
+
+	gpiomtd->ale = devm_gpiod_get(dev, "ale", GPIOD_OUT_LOW);
+	if (IS_ERR(gpiomtd->ale))
+		return PTR_ERR(gpiomtd->ale);
+
+	gpiomtd->cle = devm_gpiod_get(dev, "cle", GPIOD_OUT_LOW);
+	if (IS_ERR(gpiomtd->cle))
+		return PTR_ERR(gpiomtd->cle);
+
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
-		if (!gpio_is_valid(gpiomtd->gpio_nce[i]))
-			break;
-		if (devm_gpio_request_one(dev, gpiomtd->gpio_nce[i],
-					  GPIOF_OUT_INIT_HIGH, NULL))
+		if (!gpiomtd->nce[i])
 			break;
 
 		found++;
 
-		if (gpio_is_valid(gpiomtd->gpio_rdy[i])) {
-			if (devm_gpio_request_one(dev,
-						  gpiomtd->gpio_rdy[i],
-						  GPIOF_IN, NULL))
-				gpiomtd->gpio_rdy[i] = -1;
-			else if (!i)
-				chip->legacy.dev_ready = gpio_nand_devready;
-		}
+		gpiomtd->rdy[i] = devm_gpiod_get_index_optional(dev, "rdy", i,
+								GPIOD_IN);
+		if (IS_ERR(gpiomtd->rdy[i]))
+			return PTR_ERR(gpiomtd->rdy[i]);
+		if (gpiomtd->rdy[i])
+			chip->legacy.dev_ready = gpio_nand_devready;
 	}
 
 	if (!found)
@@ -351,7 +321,9 @@ static int gpio_nand_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, gpiomtd);
 
-	gpio_nand_set_wp(gpiomtd, 1);
+	/* Disable write protection, if wired up */
+	if (gpiomtd->nwp)
+		gpiod_set_value(gpiomtd->nwp, 1);
 
 	ret = nand_scan(chip, found);
 	if (ret)
@@ -366,7 +338,12 @@ static int gpio_nand_probe(struct platform_device *pdev)
 		return 0;
 
 err_wp:
-	gpio_nand_set_wp(gpiomtd, 0);
+	if (gpiomtd->nwp)
+		gpiod_set_value(gpiomtd->nwp, 0);
+
+	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
+		if (gpiomtd->nce[i] && !IS_ERR(gpiomtd->nce[i]))
+			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return ret;
 }
