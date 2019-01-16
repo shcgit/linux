@@ -1,6 +1,4 @@
 /*
- * drivers/mtd/nand/gpio.c
- *
  * Updated, and converted to generic GPIO based driver by Russell King.
  *
  * Written by Ben Dooks <ben@simtec.co.uk>
@@ -50,6 +48,7 @@ static inline struct gpiomtd *gpio_nand_getpriv(struct mtd_info *mtd)
 {
 	return container_of(mtd_to_nand(mtd), struct gpiomtd, nand_chip);
 }
+
 
 #ifdef CONFIG_ARM
 /* gpio_nand_dosync()
@@ -159,7 +158,7 @@ static struct resource *gpio_nand_get_io_sync_of(struct platform_device *pdev)
 	u64 addr;
 
 	if (of_property_read_u64(pdev->dev.of_node,
-				 "gpio-control-nand,io-sync-reg", &addr))
+				       "gpio-control-nand,io-sync-reg", &addr))
 		return NULL;
 
 	r = devm_kzalloc(&pdev->dev, sizeof(*r), GFP_KERNEL);
@@ -254,6 +253,13 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	if (IS_ERR(chip->legacy.IO_ADDR_R))
 		return PTR_ERR(chip->legacy.IO_ADDR_R);
 
+	res = gpio_nand_get_io_sync(pdev);
+	if (res) {
+		gpiomtd->io_sync = devm_ioremap_resource(dev, res);
+		if (IS_ERR(gpiomtd->io_sync))
+			return PTR_ERR(gpiomtd->io_sync);
+	}
+
 	ret = gpio_nand_get_config(dev, &gpiomtd->plat);
 	if (ret)
 		return ret;
@@ -261,13 +267,6 @@ static int gpio_nand_probe(struct platform_device *pdev)
 //	if (resource_size(res) < 2)
 //		gpiomtd->plat.options &= ~(NAND_BUSWIDTH_16 |
 //					   NAND_BUSWIDTH_AUTO);
-
-	res = gpio_nand_get_io_sync(pdev);
-	if (res) {
-		gpiomtd->io_sync = devm_ioremap_resource(dev, res);
-		if (IS_ERR(gpiomtd->io_sync))
-			return PTR_ERR(gpiomtd->io_sync);
-	}
 
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
 		gpiomtd->nce[i] = devm_gpiod_get_index_optional(dev, "nce", i,
@@ -300,6 +299,7 @@ static int gpio_nand_probe(struct platform_device *pdev)
 								GPIOD_IN);
 		if (IS_ERR(gpiomtd->rdy[i]))
 			return PTR_ERR(gpiomtd->rdy[i]);
+		/* Using RDY pin */
 		if (gpiomtd->rdy[i])
 			chip->legacy.dev_ready = gpio_nand_devready;
 	}
@@ -342,7 +342,7 @@ err_wp:
 		gpiod_set_value(gpiomtd->nwp, 0);
 
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-		if (gpiomtd->nce[i] && !IS_ERR(gpiomtd->nce[i]))
+		if (gpiomtd->nce[i])
 			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return ret;
