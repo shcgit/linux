@@ -253,20 +253,21 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	if (IS_ERR(chip->legacy.IO_ADDR_R))
 		return PTR_ERR(chip->legacy.IO_ADDR_R);
 
+	ret = gpio_nand_get_config(dev, &gpiomtd->plat);
+	if (ret)
+		return ret;
+
+	/* Sanity check */
+	if (resource_size(res) < 2)
+		gpiomtd->plat.options &= ~(NAND_BUSWIDTH_16 |
+					   NAND_BUSWIDTH_AUTO);
+
 	res = gpio_nand_get_io_sync(pdev);
 	if (res) {
 		gpiomtd->io_sync = devm_ioremap_resource(dev, res);
 		if (IS_ERR(gpiomtd->io_sync))
 			return PTR_ERR(gpiomtd->io_sync);
 	}
-
-	ret = gpio_nand_get_config(dev, &gpiomtd->plat);
-	if (ret)
-		return ret;
-
-//	if (resource_size(res) < 2)
-//		gpiomtd->plat.options &= ~(NAND_BUSWIDTH_16 |
-//					   NAND_BUSWIDTH_AUTO);
 
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
 		gpiomtd->nce[i] = devm_gpiod_get_index_optional(dev, "nce", i,
