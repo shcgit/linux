@@ -18,17 +18,14 @@
 
 #include <linux/kernel.h>
 #include <linux/err.h>
-#include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/gpio/consumer.h>
 #include <linux/io.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/rawnand.h>
-#include <linux/mtd/partitions.h>
 #include <linux/mtd/nand-gpio.h>
 #include <linux/of.h>
-#include <linux/of_address.h>
 
 #define MAX_NAND_PER_CHIP	4
 
@@ -138,12 +135,13 @@ static int gpio_nand_get_config_of(const struct device *dev,
 	if (!of_property_read_u32(dev->of_node, "bank-width", &val)) {
 		if (val == 2) {
 			plat->options |= NAND_BUSWIDTH_16;
-		} else if (val == 0) {
-			plat->options |= NAND_BUSWIDTH_AUTO;
 		} else if (val != 1) {
 			dev_err(dev, "invalid bank-width %u\n", val);
 			return -EINVAL;
 		}
+	} else {
+		plat->options |= NAND_BUSWIDTH_AUTO;
+		dev_info(dev, "Using auto bank-width\n");
 	}
 
 	if (!of_property_read_u32(dev->of_node, "chip-delay", &val))
@@ -223,9 +221,9 @@ static int gpio_nand_remove(struct platform_device *pdev)
 	if (gpiomtd->nwp)
 		gpiod_set_value(gpiomtd->nwp, 0);
 
-	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-		if (gpiomtd->nce[i])
-			gpiod_set_value(gpiomtd->nce[i], 1);
+//	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
+//		if (gpiomtd->nce[i])
+//			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return 0;
 }
@@ -237,7 +235,7 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	struct mtd_info *mtd;
 	struct resource *res;
 	struct device *dev = &pdev->dev;
-	int i, ret, found = 0;
+	int i, ret, cscount = 0;
 
 	if (!dev->of_node && !dev_get_platdata(dev))
 		return -EINVAL;
@@ -278,7 +276,7 @@ static int gpio_nand_probe(struct platform_device *pdev)
 			break;
 	}
 
-	gpiomtd->nwp = devm_gpiod_get_optional(dev, "nwp", GPIOD_OUT_LOW);
+	gpiomtd->nwp = devm_gpiod_get_optional(dev, "nwp", GPIOD_OUT_HIGH);
 	if (IS_ERR(gpiomtd->nwp))
 		return PTR_ERR(gpiomtd->nwp);
 
@@ -294,19 +292,20 @@ static int gpio_nand_probe(struct platform_device *pdev)
 		if (!gpiomtd->nce[i])
 			break;
 
-		found++;
+		cscount++;
 
 		gpiomtd->rdy[i] = devm_gpiod_get_index_optional(dev, "rdy", i,
 								GPIOD_IN);
 		if (IS_ERR(gpiomtd->rdy[i]))
 			return PTR_ERR(gpiomtd->rdy[i]);
-		/* Using RDY pin */
-		if (gpiomtd->rdy[i])
-			chip->legacy.dev_ready = gpio_nand_devready;
 	}
 
-	if (!found)
+	if (!cscount)
 		return -EINVAL;
+
+	/* Using RDY pin */
+	if (gpiomtd->rdy[0])
+		chip->legacy.dev_ready = gpio_nand_devready;
 
 	nand_set_flash_node(chip, pdev->dev.of_node);
 	chip->legacy.IO_ADDR_W	= chip->legacy.IO_ADDR_R;
@@ -326,25 +325,21 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	if (gpiomtd->nwp)
 		gpiod_set_value(gpiomtd->nwp, 1);
 
-	ret = nand_scan(chip, found);
-	if (ret)
-		goto err_wp;
+	ret = nand_scan(chip, cscount);
+	if (!ret) {
+		if (gpiomtd->plat.adjust_parts)
+			gpiomtd->plat.adjust_parts(&gpiomtd->plat, mtd->size);
 
-	if (gpiomtd->plat.adjust_parts)
-		gpiomtd->plat.adjust_parts(&gpiomtd->plat, mtd->size);
+		ret = mtd_device_register(mtd, gpiomtd->plat.parts,
+					  gpiomtd->plat.num_parts);
+	}
 
-	ret = mtd_device_register(mtd, gpiomtd->plat.parts,
-				  gpiomtd->plat.num_parts);
-	if (!ret)
-		return 0;
-
-err_wp:
-	if (gpiomtd->nwp)
+	if (ret && gpiomtd->nwp)
 		gpiod_set_value(gpiomtd->nwp, 0);
 
-	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-		if (gpiomtd->nce[i])
-			gpiod_set_value(gpiomtd->nce[i], 1);
+//	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
+//		if (gpiomtd->nce[i])
+//			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return ret;
 }
