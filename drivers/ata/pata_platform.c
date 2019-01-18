@@ -86,6 +86,7 @@ static void pata_platform_setup_port(struct ata_ioports *ioaddr,
  *	@ioport_shift: I/O port shift
  *	@__pio_mask: PIO mask
  *	@sht: scsi_host_template to use when registering
+ *	@use16bit: Flag to indicate 16-bit IO instead of 32-bit
  *
  *	Register a platform bus IDE interface. Such interfaces are PIO and we
  *	assume do not support IRQ sharing.
@@ -108,7 +109,7 @@ static void pata_platform_setup_port(struct ata_ioports *ioaddr,
 int __pata_platform_probe(struct device *dev, struct resource *io_res,
 			  struct resource *ctl_res, struct resource *irq_res,
 			  unsigned int ioport_shift, int __pio_mask,
-			  struct scsi_host_template *sht, int use16bit)
+			  struct scsi_host_template *sht, bool use16bit)
 {
 	struct ata_host *host;
 	struct ata_port *ap;
@@ -233,7 +234,7 @@ static int pata_platform_probe(struct platform_device *pdev)
 
 	return __pata_platform_probe(&pdev->dev, io_res, ctl_res, irq_res,
 				     pp_info ? pp_info->ioport_shift : 0,
-				     pio_mask, &pata_platform_sht, 0);
+				     pio_mask, &pata_platform_sht, false);
 }
 
 static struct platform_driver pata_platform_driver = {

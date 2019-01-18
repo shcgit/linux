@@ -20,7 +20,7 @@ extern int __pata_platform_probe(struct device *dev,
 				 unsigned int ioport_shift,
 				 int __pio_mask,
 				 struct scsi_host_template *sht,
-				 int use16bit);
+				 bool use16bit);
 
 /*
  * Marvell SATA private data
