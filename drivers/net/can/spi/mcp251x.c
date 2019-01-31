@@ -935,7 +935,6 @@ static int mcp251x_open(struct net_device *net)
 {
 	struct mcp251x_priv *priv = netdev_priv(net);
 	struct spi_device *spi = priv->spi;
-	unsigned long flags = IRQF_ONESHOT | IRQF_TRIGGER_FALLING;
 	int ret;
 
 	ret = open_candev(net);
@@ -952,7 +951,8 @@ static int mcp251x_open(struct net_device *net)
 	priv->tx_len = 0;
 
 	ret = request_threaded_irq(spi->irq, NULL, mcp251x_can_ist,
-				   flags, dev_name(&spi->dev), priv);
+				   IRQF_ONESHOT | IRQF_TRIGGER_FALLING,
+				   dev_name(&spi->dev), priv);
 	if (ret) {
 		dev_err(&spi->dev, "failed to acquire irq %d\n", spi->irq);
 		mcp251x_power_enable(priv->transceiver, 0);
