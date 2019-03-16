@@ -10,7 +10,6 @@ obj-$(CONFIG_VIDEO_MMP_CAMERA) += marvell-ccic/
 
 obj-$(CONFIG_VIDEO_OMAP3)	+= omap3isp/
 obj-$(CONFIG_VIDEO_PXA27x)	+= pxa_camera.o
-obj-$(CONFIG_VIDEO_TW28XX)	+= tw28xx.o
 
 obj-$(CONFIG_VIDEO_VIU) += fsl-viu.o
 

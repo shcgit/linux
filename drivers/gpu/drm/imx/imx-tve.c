@@ -694,7 +694,6 @@ static int imx_tve_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id imx_tve_dt_ids[] = {
-	{ .compatible = "fsl,imx51-tve", },
 	{ .compatible = "fsl,imx53-tve", },
 	{ /* sentinel */ }
 };

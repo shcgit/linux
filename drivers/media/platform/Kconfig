@@ -132,12 +132,6 @@ config VIDEO_RENESAS_CEU
 	---help---
 	  This is a v4l2 driver for the Renesas CEU Interface
 
-config VIDEO_TW28XX
-	tristate "Techwell/Intersil TW28xx Quad Video decoder"
-	depends on VIDEO_V4L2 && MFD_TW28XX
-	help
-	  Support for the Techwell TW28XX Quad video decoder.
-
 source "drivers/media/platform/soc_camera/Kconfig"
 source "drivers/media/platform/exynos4-is/Kconfig"
 source "drivers/media/platform/am437x/Kconfig"

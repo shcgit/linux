@@ -601,7 +601,7 @@ static int imx_ldb_bind(struct device *dev, struct device *master, void *data)
 	int ret;
 	int i;
 
-printk("bind0 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+dev_info(dev,"bind0 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	imx_ldb = devm_kzalloc(dev, sizeof(*imx_ldb), GFP_KERNEL);
 	if (!imx_ldb)
 		return -ENOMEM;
@@ -647,7 +647,7 @@ printk("bind0 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	if (i == 0)
 		return ret;
 
-printk("bind1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+dev_info(dev,"bind1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	for_each_child_of_node(np, child) {
 		struct imx_ldb_channel *channel;
 		int bus_format;
