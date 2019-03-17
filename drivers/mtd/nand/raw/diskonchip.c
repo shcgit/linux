@@ -1652,8 +1652,21 @@ static void release_nanddoc(void)
 	}
 }
 
+static int doc_disabled = 0;
+
+static int __init doc_disable(char *str)
+{
+	doc_disabled = 1;
+	return 1;
+}
+
+__setup("doc_disable", doc_disable);
+
 static int __init init_nanddoc(void)
 {
+	if (doc_disabled)
+		return 0;
+
 	int i, ret = 0;
 
 	if (doc_config_location) {
