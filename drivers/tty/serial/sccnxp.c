@@ -91,7 +91,7 @@
 #define SCCNXP_IPR_REG			(0x0d)
 #define SCCNXP_OPCR_REG			SCCNXP_IPR_REG
 #define SCCNXP_SOP_REG			(0x0e)
-#define SCCNXP_START_COUNTER_REG	(SCCNXP_SOP_REG)
+#define SCCNXP_START_COUNTER_REG	SCCNXP_SOP_REG
 #define SCCNXP_ROP_REG			(0x0f)
 
 /* Route helpers */
