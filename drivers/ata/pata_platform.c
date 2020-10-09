@@ -43,20 +43,6 @@ static int pata_platform_set_mode(struct ata_link *link, struct ata_device **unu
 	return 0;
 }
 
-//static unsigned int pata_platform_xfer16_noirq(struct ata_queued_cmd *qc,
-//					       unsigned char *buf,
-//					       unsigned int buflen, int rw)
-//{
-//	unsigned long flags;
-//	unsigned int consumed;
-//
-//	local_irq_save(flags);
-//	consumed = ata_sff_data_xfer(qc, buf, buflen, rw);
-//	local_irq_restore(flags);
-//
-//	return consumed;
-//}
-
 static struct scsi_host_template pata_platform_sht = {
 	ATA_PIO_SHT(DRV_NAME),
 };
@@ -144,7 +130,7 @@ int __pata_platform_probe(struct device *dev, struct resource *io_res,
 	ap->ops->cable_detect = ata_cable_unknown;
 	ap->ops->set_mode = pata_platform_set_mode;
 	if (use16bit)
-		ap->ops->sff_data_xfer = ata_sff_data_xfer;//pata_platform_xfer16_noirq;
+		ap->ops->sff_data_xfer = ata_sff_data_xfer;
 	else
 		ap->ops->sff_data_xfer = ata_sff_data_xfer32;
 
