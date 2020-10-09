@@ -350,9 +350,11 @@ static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	/* Install FIQ handler */
 	set_fiq_handler(&daifiq_start, &daifiq_end - &daifiq_start);
 
-	return snd_pcm_lib_preallocate_pages_for_all(rtd->pcm,
+	snd_pcm_lib_preallocate_pages_for_all(rtd->pcm,
 		SNDRV_DMA_TYPE_CONTINUOUS, snd_dma_continuous_data(GFP_KERNEL),
 		CLPS711X_SNDBUF_SIZE, CLPS711X_SNDBUF_SIZE);
+
+	return 0;
 }
 
 static void clps711x_pcm_free(struct snd_pcm *pcm)
