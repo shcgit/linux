@@ -314,7 +314,7 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	chip->options		= gpiomtd->plat.options;
 	chip->legacy.chip_delay	= gpiomtd->plat.chip_delay;
 	chip->legacy.cmd_ctrl	= gpio_nand_cmd_ctrl;
-	chip->select_chip	= gpio_nand_select_chip;
+	chip->legacy.select_chip = gpio_nand_select_chip;
 
 	mtd			= nand_to_mtd(chip);
 	mtd->dev.parent		= dev;
