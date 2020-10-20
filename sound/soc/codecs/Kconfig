@@ -1363,7 +1363,7 @@ config SND_SOC_WM9712
 	select AC97_BUS_COMPAT if AC97_BUS_NEW
 
 config SND_SOC_WM9713
-	tristate "Wolfson Microelectronics WM9713 codec"
+	tristate
 	select REGMAP_AC97
 	select AC97_BUS_COMPAT if AC97_BUS_NEW
 
