@@ -982,12 +982,14 @@ static int sccnxp_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "Using poll mode, resolution %u usecs\n",
 			 s->pdata.poll_time_us);
 		s->poll = 1;
-	} else {
-		ret = platform_get_irq(pdev, 0);
-		if (!IS_ERR_VALUE(ret))
-			s->irq = ret;
-		else
+	}
+
+	if (!s->poll) {
+		s->irq = platform_get_irq(pdev, 0);
+		if (s->irq < 0) {
+			ret = -ENXIO;
 			goto err_out;
+		}
 	}
 
 	s->uart.owner		= THIS_MODULE;
