@@ -33,11 +33,6 @@ static inline struct regmap *syscon_regmap_lookup_by_compatible(const char *s)
 	return ERR_PTR(-ENOTSUPP);
 }
 
-static inline struct regmap *syscon_regmap_lookup_by_pdevname(const char *s)
-{
-	return ERR_PTR(-ENOTSUPP);
-}
-
 static inline struct regmap *syscon_regmap_lookup_by_phandle(
 					struct device_node *np,
 					const char *property)
