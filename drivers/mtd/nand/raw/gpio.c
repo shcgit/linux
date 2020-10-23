@@ -209,16 +209,19 @@ gpio_nand_get_io_sync(struct platform_device *pdev)
 static int gpio_nand_remove(struct platform_device *pdev)
 {
 	struct gpiomtd *gpiomtd = platform_get_drvdata(pdev);
-	int i;
+	struct nand_chip *chip = &gpiomtd->nand_chip;
+	int ret;
 
-	nand_release(&gpiomtd->nand_chip);
+	ret = mtd_device_unregister(nand_to_mtd(chip));
+	WARN_ON(ret);
+	nand_cleanup(chip);
 
 	/* Enable write protection and disable the chip */
-	if (gpiomtd->nwp)
+	if (gpiomtd->nwp && !IS_ERR(gpiomtd->nwp))
 		gpiod_set_value(gpiomtd->nwp, 0);
 
 //	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-//		if (gpiomtd->nce[i])
+//		if (gpiomtd->nce[i] && !IS_ERR(gpiomtd->nce[i]))
 //			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return 0;
@@ -273,16 +276,22 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	}
 
 	gpiomtd->nwp = devm_gpiod_get_optional(dev, "nwp", GPIOD_OUT_HIGH);
-	if (IS_ERR(gpiomtd->nwp))
-		return PTR_ERR(gpiomtd->nwp);
+	if (IS_ERR(gpiomtd->nwp)) {
+		ret = PTR_ERR(gpiomtd->nwp);
+		goto out_ce;
+	}
 
 	gpiomtd->ale = devm_gpiod_get(dev, "ale", GPIOD_OUT_LOW);
-	if (IS_ERR(gpiomtd->ale))
-		return PTR_ERR(gpiomtd->ale);
+	if (IS_ERR(gpiomtd->ale)) {
+		ret = PTR_ERR(gpiomtd->ale);
+		goto out_ce;
+	}
 
 	gpiomtd->cle = devm_gpiod_get(dev, "cle", GPIOD_OUT_LOW);
-	if (IS_ERR(gpiomtd->cle))
-		return PTR_ERR(gpiomtd->cle);
+	if (IS_ERR(gpiomtd->cle)) {
+		ret = PTR_ERR(gpiomtd->cle);
+		goto out_ce;
+	}
 
 	for (i = 0; i < MAX_NAND_PER_CHIP; i++) {
 		if (!gpiomtd->nce[i])
@@ -292,8 +301,10 @@ static int gpio_nand_probe(struct platform_device *pdev)
 
 		gpiomtd->rdy[i] = devm_gpiod_get_index_optional(dev, "rdy", i,
 								GPIOD_IN);
-		if (IS_ERR(gpiomtd->rdy[i]))
-			return PTR_ERR(gpiomtd->rdy[i]);
+		if (IS_ERR(gpiomtd->rdy[i])) {
+			ret = PTR_ERR(gpiomtd->rdy[i]);
+			goto out_ce;
+		}
 	}
 
 	if (!cscount)
@@ -322,19 +333,23 @@ static int gpio_nand_probe(struct platform_device *pdev)
 		gpiod_set_value(gpiomtd->nwp, 1);
 
 	ret = nand_scan(chip, cscount);
-	if (!ret) {
-		if (gpiomtd->plat.adjust_parts)
-			gpiomtd->plat.adjust_parts(&gpiomtd->plat, mtd->size);
+	if (ret)
+		goto err_wp;
 
-		ret = mtd_device_register(mtd, gpiomtd->plat.parts,
-					  gpiomtd->plat.num_parts);
-	}
+	if (gpiomtd->plat.adjust_parts)
+		gpiomtd->plat.adjust_parts(&gpiomtd->plat, mtd->size);
 
-	if (ret && gpiomtd->nwp)
+	ret = mtd_device_register(mtd, gpiomtd->plat.parts,
+				  gpiomtd->plat.num_parts);
+	if (!ret)
+		return 0;
+
+err_wp:
+	if (gpiomtd->nwp && !IS_ERR(gpiomtd->nwp))
 		gpiod_set_value(gpiomtd->nwp, 0);
-
+out_ce:
 //	for (i = 0; i < MAX_NAND_PER_CHIP; i++)
-//		if (gpiomtd->nce[i])
+//		if (gpiomtd->nce[i] && !IS_ERR(gpiomtd->nce[i])
 //			gpiod_set_value(gpiomtd->nce[i], 1);
 
 	return ret;
