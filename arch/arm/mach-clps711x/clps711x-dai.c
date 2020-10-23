@@ -148,11 +148,10 @@ static const struct snd_soc_component_driver clps711x_i2s_component = {
 	.name = "clps711x-i2s",
 };
 
-static int clps711x_pcm_hw_params(struct snd_pcm_substream *substream,
+static int clps711x_pcm_hw_params(struct snd_soc_component *component,
+				  struct snd_pcm_substream *substream,
 				  struct snd_pcm_hw_params *params)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
@@ -173,10 +172,15 @@ static int clps711x_pcm_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int clps711x_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
+static int clps711x_pcm_hw_free(struct snd_soc_component *component,
+				struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
+	return snd_pcm_lib_free_pages(substream);
+}
+
+static int clps711x_pcm_trigger(struct snd_soc_component *component,
+				struct snd_pcm_substream *substream, int cmd)
+{
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	switch (cmd) {
@@ -195,21 +199,19 @@ static int clps711x_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	return 0;
 }
 
-static snd_pcm_uframes_t clps711x_pcm_ptr(struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t clps711x_pcm_ptr(struct snd_soc_component *component,
+					  struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	return bytes_to_frames(substream->runtime, dai->last_ptr);
 }
 
-static int clps711x_pcm_copy(struct snd_pcm_substream *substream, int channel,
+static int clps711x_pcm_copy(struct snd_soc_component *component,
+			     struct snd_pcm_substream *substream, int channel,
 			     unsigned long pos, void __user *buf,
 			     unsigned long bytes)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	if (copy_from_user(substream->runtime->dma_area + dai->head, buf, bytes))
@@ -267,10 +269,9 @@ static const struct snd_pcm_hardware clps711x_pcm_hardware = {
 	.periods_max		= CLPS711X_SNDBUF_SIZE / 64 - 1,
 };
 
-static int clps711x_pcm_open(struct snd_pcm_substream *substream)
+static int clps711x_pcm_open(struct snd_soc_component *component,
+			     struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
@@ -297,10 +298,9 @@ static int clps711x_pcm_open(struct snd_pcm_substream *substream)
 	return snd_soc_set_runtime_hwparams(substream, &clps711x_pcm_hardware);
 }
 
-static int clps711x_pcm_close(struct snd_pcm_substream *substream)
+static int clps711x_pcm_close(struct snd_soc_component *component,
+			      struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	disable_irq(dai->irq);
@@ -308,17 +308,6 @@ static int clps711x_pcm_close(struct snd_pcm_substream *substream)
 
 	return 0;
 }
-
-static const struct snd_pcm_ops clps711x_pcm_ops = {
-	.open		= clps711x_pcm_open,
-	.close		= clps711x_pcm_close,
-	.ioctl		= snd_pcm_lib_ioctl,
-	.hw_params	= clps711x_pcm_hw_params,
-	.hw_free	= snd_pcm_lib_free_pages,
-	.trigger	= clps711x_pcm_trigger,
-	.pointer	= clps711x_pcm_ptr,
-	.copy_user	= clps711x_pcm_copy,
-};
 
 static int clps711x_pcm_probe(struct snd_soc_component *component)
 {
@@ -330,9 +319,9 @@ static int clps711x_pcm_probe(struct snd_soc_component *component)
 	return 0;
 }
 
-static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
+static int clps711x_pcm_new(struct snd_soc_component *component,
+			    struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 	int ret;
 
@@ -357,10 +346,9 @@ static int clps711x_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	return 0;
 }
 
-static void clps711x_pcm_free(struct snd_pcm *pcm)
+static void clps711x_pcm_free(struct snd_soc_component *component,
+			      struct snd_pcm *pcm)
 {
-	struct snd_soc_pcm_runtime *rtd = pcm->private_data;
-	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct clps711x_dai *dai = snd_soc_component_get_drvdata(component);
 
 	free_irq(dai->irq, NULL);
@@ -372,10 +360,16 @@ static void clps711x_pcm_free(struct snd_pcm *pcm)
 
 static struct snd_soc_component_driver clps711x_soc_component = {
 	.name		= DRV_NAME,
-	.ops		= &clps711x_pcm_ops,
 	.probe		= clps711x_pcm_probe,
-	.pcm_new	= clps711x_pcm_new,
-	.pcm_free	= clps711x_pcm_free,
+	.open		= clps711x_pcm_open,
+	.close		= clps711x_pcm_close,
+	.hw_params	= clps711x_pcm_hw_params,
+	.hw_free	= clps711x_pcm_hw_free,
+	.trigger	= clps711x_pcm_trigger,
+	.pointer	= clps711x_pcm_ptr,
+	.copy_user	= clps711x_pcm_copy,
+	.pcm_construct	= clps711x_pcm_new,
+	.pcm_destruct	= clps711x_pcm_free,
 };
 
 static int clps711x_enable_fifo(void __iomem *base, u32 channel)
