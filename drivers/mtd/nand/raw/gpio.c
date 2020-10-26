@@ -14,12 +14,14 @@
 
 #include <linux/kernel.h>
 #include <linux/err.h>
+#include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/gpio/consumer.h>
 #include <linux/io.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/rawnand.h>
+#include <linux/mtd/partitions.h>
 #include <linux/mtd/nand-gpio.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -71,51 +73,7 @@ static void gpio_nand_dosync(struct gpiomtd *gpiomtd)
 #else
 static inline void gpio_nand_dosync(struct gpiomtd *gpiomtd) {}
 #endif
-/*
-static void gpio_nand_cmd_ctrl(struct nand_chip *chip, int cmd,
-			       unsigned int ctrl)
-{
-	struct gpiomtd *gpiomtd = gpio_nand_getpriv(nand_to_mtd(chip));
 
-	gpio_nand_dosync(gpiomtd);
-
-	if (ctrl & NAND_CTRL_CHANGE) {
-		if (gpiomtd->nce[gpiomtd->chip_index])
-			gpiod_set_value(gpiomtd->nce[gpiomtd->chip_index],
-					!(ctrl & NAND_NCE));
-		gpiod_set_value(gpiomtd->cle, !!(ctrl & NAND_CLE));
-		gpiod_set_value(gpiomtd->ale, !!(ctrl & NAND_ALE));
-		gpio_nand_dosync(gpiomtd);
-	}
-	if (cmd == NAND_CMD_NONE)
-		return;
-
-	writeb(cmd, gpiomtd->nand_chip.legacy.IO_ADDR_W);
-	gpio_nand_dosync(gpiomtd);
-}
-
-static int gpio_nand_devready(struct nand_chip *chip)
-{
-	struct gpiomtd *gpiomtd = gpio_nand_getpriv(nand_to_mtd(chip));
-	int idx = gpiomtd->rdy[gpiomtd->chip_index] ? gpiomtd->chip_index : 0;
-
-	return gpiod_get_value(gpiomtd->rdy[idx]);
-}
-
-static void gpio_nand_select_chip(struct nand_chip *chip, int chipnr)
-{
-	struct gpiomtd *gpiomtd = gpio_nand_getpriv(nand_to_mtd(chip));
-
-	switch (chipnr) {
-	case -1:
-		gpio_nand_cmd_ctrl(chip, NAND_CMD_NONE, 0 | NAND_CTRL_CHANGE);
-		break;
-	default:
-		gpiomtd->chip_index = chipnr;
-		break;
-	}
-}
-*/
 static int gpio_nand_exec_instr(struct nand_chip *chip, int cs,
 				const struct nand_op_instr *instr)
 {
