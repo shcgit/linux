@@ -377,16 +377,9 @@ static int gpio_nand_probe(struct platform_device *pdev)
 	chip->ecc.algo		= NAND_ECC_HAMMING;
 	chip->options		= gpiomtd->plat.options;
 	chip->controller	= &gpiomtd->base;
-//	chip->legacy.chip_delay	= gpiomtd->plat.chip_delay;
-//	chip->legacy.cmd_ctrl	= gpio_nand_cmd_ctrl;
-//	chip->legacy.select_chip = gpio_nand_select_chip;
 
 	mtd			= nand_to_mtd(chip);
 	mtd->dev.parent		= dev;
-
-	/* Using RDY pin */
-//	if (gpiomtd->rdy[0])
-//		chip->legacy.dev_ready = gpio_nand_devready;
 
 	platform_set_drvdata(pdev, gpiomtd);
 
