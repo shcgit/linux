@@ -524,11 +524,13 @@ static int fsl_esai_startup(struct snd_pcm_substream *substream,
 				   ESAI_SAICR_SYNC, esai_priv->synchronous ?
 				   ESAI_SAICR_SYNC : 0);
 
-		/* Set a default slot number -- 2 */
+		/* Set slots count */
 		regmap_update_bits(esai_priv->regmap, REG_ESAI_TCCR,
-				   ESAI_xCCR_xDC_MASK, ESAI_xCCR_xDC(2));
+				   ESAI_xCCR_xDC_MASK,
+				   ESAI_xCCR_xDC(esai_priv->slots));
 		regmap_update_bits(esai_priv->regmap, REG_ESAI_RCCR,
-				   ESAI_xCCR_xDC_MASK, ESAI_xCCR_xDC(2));
+				   ESAI_xCCR_xDC_MASK,
+				   ESAI_xCCR_xDC(esai_priv->slots));
 	}
 
 	return 0;
@@ -543,7 +545,7 @@ static int fsl_esai_hw_params(struct snd_pcm_substream *substream,
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	u32 width = params_width(params);
 	u32 channels = params_channels(params);
-	u32 pins = DIV_ROUND_UP(channels, esai_priv->slots);
+	u32 pins = 1;//DIV_ROUND_UP(channels, esai_priv->slots);
 	u32 slot_width = width;
 	u32 bclk, mask, val;
 	int ret;
@@ -652,7 +654,7 @@ static int fsl_esai_register_restore(struct fsl_esai *esai_priv)
 static void fsl_esai_trigger_start(struct fsl_esai *esai_priv, bool tx)
 {
 	u8 i, channels = esai_priv->channels[tx];
-	u32 pins = DIV_ROUND_UP(channels, esai_priv->slots);
+	u32 pins = 1;//DIV_ROUND_UP(channels, esai_priv->slots);
 	u32 mask;
 
 	regmap_update_bits(esai_priv->regmap, REG_ESAI_xFCR(tx),
