@@ -398,12 +398,12 @@ static irqreturn_t davinci_mcasp_rx_irq_handler(int irq, void *data)
 
 	stat = mcasp_get_reg(mcasp, DAVINCI_MCASP_RXSTAT_REG);
 	if (stat & ROVRN & irq_mask) {
-		dev_warn(mcasp->dev, "Receive buffer overflow\n");
+		dev_warn_ratelimited(mcasp->dev, "Receive buffer overflow\n");
 		handled_mask |= ROVRN;
 
-		substream = mcasp->substreams[SNDRV_PCM_STREAM_CAPTURE];
-		if (substream)
-			snd_pcm_stop_xrun(substream);
+//		substream = mcasp->substreams[SNDRV_PCM_STREAM_CAPTURE];
+//		if (substream)
+//			snd_pcm_stop_xrun(substream);
 	}
 
 	if (!handled_mask)
