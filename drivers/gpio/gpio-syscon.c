@@ -226,12 +226,14 @@ static int syscon_gpio_probe(struct platform_device *pdev)
 					 &priv->dreg_offset);
 	if (ret)
 		dev_err(dev, "can't read the data register offset!\n");
+
 	priv->dreg_offset <<= 3;
 
 	ret = of_property_read_u32_index(np, "gpio,syscon-dev", 2,
 					 &priv->dir_reg_offset);
 	if (ret)
 		dev_dbg(dev, "can't read the dir register offset!\n");
+
 	priv->dir_reg_offset <<= 3;
 
 	priv->chip.parent = dev;
