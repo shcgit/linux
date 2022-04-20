@@ -96,14 +96,6 @@ static int clps711x_keypad_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	priv->syscon = syscon_regmap_lookup_by_phandle(np, "syscon");
-	if (IS_ERR(priv->syscon) && (PTR_ERR(priv->syscon) != -EPROBE_DEFER)) {
-		/* falling back to old bindings */
-		priv->syscon =
-			syscon_regmap_lookup_by_compatible("cirrus,ep7209-syscon1");
-		if (!IS_ERR(priv->syscon))
-			dev_warn(dev, "Please migrate driver bindings"
-				      " to use syscon phandle.\n");
-	}
 	if (IS_ERR(priv->syscon))
 		return PTR_ERR(priv->syscon);
 
