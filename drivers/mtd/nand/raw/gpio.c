@@ -168,9 +168,8 @@ static int gpio_nand_exec_op(struct nand_chip *chip,
 
 static int gpio_nand_attach_chip(struct nand_chip *chip)
 {
-	chip->ecc.engine_type = NAND_ECC_ENGINE_TYPE_SOFT;
-
-	if (chip->ecc.algo == NAND_ECC_ALGO_UNKNOWN)
+	if (chip->ecc.engine_type == NAND_ECC_ENGINE_TYPE_SOFT &&
+	    chip->ecc.algo == NAND_ECC_ALGO_UNKNOWN)
 		chip->ecc.algo = NAND_ECC_ALGO_HAMMING;
 
 	return 0;
@@ -313,8 +312,7 @@ static int gpio_nand_probe(struct platform_device *pdev)
 
 	chip = &gpiomtd->nand_chip;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	gpiomtd->io = devm_ioremap_resource(dev, res);
+	gpiomtd->io = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(gpiomtd->io))
 		return PTR_ERR(gpiomtd->io);
 
@@ -394,6 +392,13 @@ static int gpio_nand_probe(struct platform_device *pdev)
 
 	if (gpiomtd->nwp && !IS_ERR(gpiomtd->nwp))
 		gpiod_set_value(gpiomtd->nwp, 1);
+
+	/*
+	 * This driver assumes that the default ECC engine should be TYPE_SOFT.
+	 * Set ->engine_type before registering the NAND devices in order to
+	 * provide a driver specific default value.
+	 */
+	chip->ecc.engine_type = NAND_ECC_ENGINE_TYPE_SOFT;
 
 	ret = nand_scan(chip, cscount);
 	if (ret)
