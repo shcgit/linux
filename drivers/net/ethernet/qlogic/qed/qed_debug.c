@@ -3204,8 +3204,8 @@ static u32 qed_grc_dump_big_ram(struct qed_hwfn *p_hwfn,
 		     BIT(big_ram->is_256b_bit_offset[dev_data->chip_id]) ? 256
 									 : 128;
 
-	strncpy(type_name, big_ram->instance_name, BIG_RAM_NAME_LEN);
-	strncpy(mem_name, big_ram->instance_name, BIG_RAM_NAME_LEN);
+	memcpy(type_name, big_ram->instance_name, BIG_RAM_NAME_LEN);
+	memcpy(mem_name, big_ram->instance_name, BIG_RAM_NAME_LEN);
 
 	/* Dump memory header */
 	offset += qed_grc_dump_mem_hdr(p_hwfn,
@@ -6359,8 +6359,7 @@ static void qed_read_str_from_buf(void *buf, u32 *offset, u32 size, char *dest)
 {
 	const char *source_str = &((const char *)buf)[*offset];
 
-	strncpy(dest, source_str, size);
-	dest[size - 1] = '\0';
+	strscpy(dest, source_str, size);
 	*offset += size;
 }
 
@@ -8113,5 +8112,600 @@ int qed_dbg_idle_chk_size(struct qed_dev *cdev)
 
 int qed_dbg_reg_fifo(struct qed_dev *cdev, void *buffer, u32 *num_dumped_bytes)
 {
-	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_IDLE_CHK,
-			                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_REG_FIFO,
+			       num_dumped_bytes);
+}
+
+int qed_dbg_reg_fifo_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_REG_FIFO);
+}
+
+int qed_dbg_igu_fifo(struct qed_dev *cdev, void *buffer, u32 *num_dumped_bytes)
+{
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_IGU_FIFO,
+			       num_dumped_bytes);
+}
+
+int qed_dbg_igu_fifo_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_IGU_FIFO);
+}
+
+static int qed_dbg_nvm_image_length(struct qed_hwfn *p_hwfn,
+				    enum qed_nvm_images image_id, u32 *length)
+{
+	struct qed_nvm_image_att image_att;
+	int rc;
+
+	*length = 0;
+	rc = qed_mcp_get_nvm_image_att(p_hwfn, image_id, &image_att);
+	if (rc)
+		return rc;
+
+	*length = image_att.length;
+
+	return rc;
+}
+
+static int qed_dbg_nvm_image(struct qed_dev *cdev, void *buffer,
+			     u32 *num_dumped_bytes,
+			     enum qed_nvm_images image_id)
+{
+	struct qed_hwfn *p_hwfn =
+		&cdev->hwfns[cdev->engine_for_debug];
+	u32 len_rounded;
+	int rc;
+
+	*num_dumped_bytes = 0;
+	rc = qed_dbg_nvm_image_length(p_hwfn, image_id, &len_rounded);
+	if (rc)
+		return rc;
+
+	DP_NOTICE(p_hwfn->cdev,
+		  "Collecting a debug feature [\"nvram image %d\"]\n",
+		  image_id);
+
+	len_rounded = roundup(len_rounded, sizeof(u32));
+	rc = qed_mcp_get_nvm_image(p_hwfn, image_id, buffer, len_rounded);
+	if (rc)
+		return rc;
+
+	/* QED_NVM_IMAGE_NVM_META image is not swapped like other images */
+	if (image_id != QED_NVM_IMAGE_NVM_META)
+		cpu_to_be32_array((__force __be32 *)buffer,
+				  (const u32 *)buffer,
+				  len_rounded / sizeof(u32));
+
+	*num_dumped_bytes = len_rounded;
+
+	return rc;
+}
+
+int qed_dbg_protection_override(struct qed_dev *cdev, void *buffer,
+				u32 *num_dumped_bytes)
+{
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_PROTECTION_OVERRIDE,
+			       num_dumped_bytes);
+}
+
+int qed_dbg_protection_override_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_PROTECTION_OVERRIDE);
+}
+
+int qed_dbg_fw_asserts(struct qed_dev *cdev, void *buffer,
+		       u32 *num_dumped_bytes)
+{
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_FW_ASSERTS,
+			       num_dumped_bytes);
+}
+
+int qed_dbg_fw_asserts_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_FW_ASSERTS);
+}
+
+int qed_dbg_ilt(struct qed_dev *cdev, void *buffer, u32 *num_dumped_bytes)
+{
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_ILT, num_dumped_bytes);
+}
+
+int qed_dbg_ilt_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_ILT);
+}
+
+int qed_dbg_mcp_trace(struct qed_dev *cdev, void *buffer,
+		      u32 *num_dumped_bytes)
+{
+	return qed_dbg_feature(cdev, buffer, DBG_FEATURE_MCP_TRACE,
+			       num_dumped_bytes);
+}
+
+int qed_dbg_mcp_trace_size(struct qed_dev *cdev)
+{
+	return qed_dbg_feature_size(cdev, DBG_FEATURE_MCP_TRACE);
+}
+
+/* Defines the amount of bytes allocated for recording the length of debugfs
+ * feature buffer.
+ */
+#define REGDUMP_HEADER_SIZE			sizeof(u32)
+#define REGDUMP_HEADER_SIZE_SHIFT		0
+#define REGDUMP_HEADER_SIZE_MASK		0xffffff
+#define REGDUMP_HEADER_FEATURE_SHIFT		24
+#define REGDUMP_HEADER_FEATURE_MASK		0x1f
+#define REGDUMP_HEADER_BIN_DUMP_SHIFT		29
+#define REGDUMP_HEADER_BIN_DUMP_MASK		0x1
+#define REGDUMP_HEADER_OMIT_ENGINE_SHIFT	30
+#define REGDUMP_HEADER_OMIT_ENGINE_MASK		0x1
+#define REGDUMP_HEADER_ENGINE_SHIFT		31
+#define REGDUMP_HEADER_ENGINE_MASK		0x1
+#define REGDUMP_MAX_SIZE			0x1000000
+#define ILT_DUMP_MAX_SIZE			(1024 * 1024 * 15)
+
+enum debug_print_features {
+	OLD_MODE = 0,
+	IDLE_CHK = 1,
+	GRC_DUMP = 2,
+	MCP_TRACE = 3,
+	REG_FIFO = 4,
+	PROTECTION_OVERRIDE = 5,
+	IGU_FIFO = 6,
+	PHY = 7,
+	FW_ASSERTS = 8,
+	NVM_CFG1 = 9,
+	DEFAULT_CFG = 10,
+	NVM_META = 11,
+	MDUMP = 12,
+	ILT_DUMP = 13,
+};
+
+static u32 qed_calc_regdump_header(struct qed_dev *cdev,
+				   enum debug_print_features feature,
+				   int engine, u32 feature_size,
+				   u8 omit_engine, u8 dbg_bin_dump)
+{
+	u32 res = 0;
+
+	SET_FIELD(res, REGDUMP_HEADER_SIZE, feature_size);
+	if (res != feature_size)
+		DP_NOTICE(cdev,
+			  "Feature %d is too large (size 0x%x) and will corrupt the dump\n",
+			  feature, feature_size);
+
+	SET_FIELD(res, REGDUMP_HEADER_FEATURE, feature);
+	SET_FIELD(res, REGDUMP_HEADER_BIN_DUMP, dbg_bin_dump);
+	SET_FIELD(res, REGDUMP_HEADER_OMIT_ENGINE, omit_engine);
+	SET_FIELD(res, REGDUMP_HEADER_ENGINE, engine);
+
+	return res;
+}
+
+int qed_dbg_all_data(struct qed_dev *cdev, void *buffer)
+{
+	u8 cur_engine, omit_engine = 0, org_engine;
+	struct qed_hwfn *p_hwfn = &cdev->hwfns[cdev->engine_for_debug];
+	struct dbg_tools_data *dev_data = &p_hwfn->dbg_info;
+	int grc_params[MAX_DBG_GRC_PARAMS], rc, i;
+	u32 offset = 0, feature_size;
+
+	for (i = 0; i < MAX_DBG_GRC_PARAMS; i++)
+		grc_params[i] = dev_data->grc.param_val[i];
+
+	if (!QED_IS_CMT(cdev))
+		omit_engine = 1;
+
+	cdev->dbg_bin_dump = 1;
+	mutex_lock(&qed_dbg_lock);
+
+	org_engine = qed_get_debug_engine(cdev);
+	for (cur_engine = 0; cur_engine < cdev->num_hwfns; cur_engine++) {
+		/* Collect idle_chks and grcDump for each hw function */
+		DP_VERBOSE(cdev, QED_MSG_DEBUG,
+			   "obtaining idle_chk and grcdump for current engine\n");
+		qed_set_debug_engine(cdev, cur_engine);
+
+		/* First idle_chk */
+		rc = qed_dbg_idle_chk(cdev, (u8 *)buffer + offset +
+				      REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, IDLE_CHK,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_idle_chk failed. rc = %d\n", rc);
+		}
+
+		/* Second idle_chk */
+		rc = qed_dbg_idle_chk(cdev, (u8 *)buffer + offset +
+				      REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, IDLE_CHK,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_idle_chk failed. rc = %d\n", rc);
+		}
+
+		/* reg_fifo dump */
+		rc = qed_dbg_reg_fifo(cdev, (u8 *)buffer + offset +
+				      REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, REG_FIFO,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_reg_fifo failed. rc = %d\n", rc);
+		}
+
+		/* igu_fifo dump */
+		rc = qed_dbg_igu_fifo(cdev, (u8 *)buffer + offset +
+				      REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, IGU_FIFO,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_igu_fifo failed. rc = %d", rc);
+		}
+
+		/* protection_override dump */
+		rc = qed_dbg_protection_override(cdev, (u8 *)buffer + offset +
+						 REGDUMP_HEADER_SIZE,
+						 &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev,
+						    PROTECTION_OVERRIDE,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev,
+			       "qed_dbg_protection_override failed. rc = %d\n",
+			       rc);
+		}
+
+		/* fw_asserts dump */
+		rc = qed_dbg_fw_asserts(cdev, (u8 *)buffer + offset +
+					REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, FW_ASSERTS,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_fw_asserts failed. rc = %d\n",
+			       rc);
+		}
+
+		feature_size = qed_dbg_ilt_size(cdev);
+		if (!cdev->disable_ilt_dump && feature_size <
+		    ILT_DUMP_MAX_SIZE) {
+			rc = qed_dbg_ilt(cdev, (u8 *)buffer + offset +
+					 REGDUMP_HEADER_SIZE, &feature_size);
+			if (!rc) {
+				*(u32 *)((u8 *)buffer + offset) =
+				    qed_calc_regdump_header(cdev, ILT_DUMP,
+							    cur_engine,
+							    feature_size,
+							    omit_engine,
+							    cdev->dbg_bin_dump);
+				offset += (feature_size + REGDUMP_HEADER_SIZE);
+			} else {
+				DP_ERR(cdev, "qed_dbg_ilt failed. rc = %d\n",
+				       rc);
+			}
+		}
+
+		/* Grc dump - must be last because when mcp stuck it will
+		 * clutter idle_chk, reg_fifo, ...
+		 */
+		for (i = 0; i < MAX_DBG_GRC_PARAMS; i++)
+			dev_data->grc.param_val[i] = grc_params[i];
+
+		rc = qed_dbg_grc(cdev, (u8 *)buffer + offset +
+				 REGDUMP_HEADER_SIZE, &feature_size);
+		if (!rc) {
+			*(u32 *)((u8 *)buffer + offset) =
+			    qed_calc_regdump_header(cdev, GRC_DUMP,
+						    cur_engine,
+						    feature_size,
+						    omit_engine,
+						    cdev->dbg_bin_dump);
+			offset += (feature_size + REGDUMP_HEADER_SIZE);
+		} else {
+			DP_ERR(cdev, "qed_dbg_grc failed. rc = %d", rc);
+		}
+	}
+
+	qed_set_debug_engine(cdev, org_engine);
+
+	/* mcp_trace */
+	rc = qed_dbg_mcp_trace(cdev, (u8 *)buffer + offset +
+			       REGDUMP_HEADER_SIZE, &feature_size);
+	if (!rc) {
+		*(u32 *)((u8 *)buffer + offset) =
+		    qed_calc_regdump_header(cdev, MCP_TRACE, cur_engine,
+					    feature_size, omit_engine,
+					    cdev->dbg_bin_dump);
+		offset += (feature_size + REGDUMP_HEADER_SIZE);
+	} else {
+		DP_ERR(cdev, "qed_dbg_mcp_trace failed. rc = %d\n", rc);
+	}
+
+	/* nvm cfg1 */
+	rc = qed_dbg_nvm_image(cdev,
+			       (u8 *)buffer + offset +
+			       REGDUMP_HEADER_SIZE, &feature_size,
+			       QED_NVM_IMAGE_NVM_CFG1);
+	if (!rc) {
+		*(u32 *)((u8 *)buffer + offset) =
+		    qed_calc_regdump_header(cdev, NVM_CFG1, cur_engine,
+					    feature_size, omit_engine,
+					    cdev->dbg_bin_dump);
+		offset += (feature_size + REGDUMP_HEADER_SIZE);
+	} else if (rc != -ENOENT) {
+		DP_ERR(cdev,
+		       "qed_dbg_nvm_image failed for image  %d (%s), rc = %d\n",
+		       QED_NVM_IMAGE_NVM_CFG1, "QED_NVM_IMAGE_NVM_CFG1",
+		       rc);
+	}
+
+		/* nvm default */
+	rc = qed_dbg_nvm_image(cdev,
+			       (u8 *)buffer + offset +
+			       REGDUMP_HEADER_SIZE, &feature_size,
+			       QED_NVM_IMAGE_DEFAULT_CFG);
+	if (!rc) {
+		*(u32 *)((u8 *)buffer + offset) =
+		    qed_calc_regdump_header(cdev, DEFAULT_CFG,
+					    cur_engine, feature_size,
+					    omit_engine,
+					    cdev->dbg_bin_dump);
+		offset += (feature_size + REGDUMP_HEADER_SIZE);
+	} else if (rc != -ENOENT) {
+		DP_ERR(cdev,
+		       "qed_dbg_nvm_image failed for image %d (%s), rc = %d\n",
+		       QED_NVM_IMAGE_DEFAULT_CFG,
+		       "QED_NVM_IMAGE_DEFAULT_CFG", rc);
+	}
+
+	/* nvm meta */
+	rc = qed_dbg_nvm_image(cdev,
+			       (u8 *)buffer + offset +
+			       REGDUMP_HEADER_SIZE, &feature_size,
+			       QED_NVM_IMAGE_NVM_META);
+	if (!rc) {
+		*(u32 *)((u8 *)buffer + offset) =
+		    qed_calc_regdump_header(cdev, NVM_META, cur_engine,
+					    feature_size, omit_engine,
+					    cdev->dbg_bin_dump);
+		offset += (feature_size + REGDUMP_HEADER_SIZE);
+	} else if (rc != -ENOENT) {
+		DP_ERR(cdev,
+		       "qed_dbg_nvm_image failed for image %d (%s), rc = %d\n",
+		       QED_NVM_IMAGE_NVM_META, "QED_NVM_IMAGE_NVM_META",
+		       rc);
+	}
+
+	/* nvm mdump */
+	rc = qed_dbg_nvm_image(cdev, (u8 *)buffer + offset +
+			       REGDUMP_HEADER_SIZE, &feature_size,
+			       QED_NVM_IMAGE_MDUMP);
+	if (!rc) {
+		*(u32 *)((u8 *)buffer + offset) =
+		    qed_calc_regdump_header(cdev, MDUMP, cur_engine,
+					    feature_size, omit_engine,
+					    cdev->dbg_bin_dump);
+		offset += (feature_size + REGDUMP_HEADER_SIZE);
+	} else if (rc != -ENOENT) {
+		DP_ERR(cdev,
+		       "qed_dbg_nvm_image failed for image %d (%s), rc = %d\n",
+		       QED_NVM_IMAGE_MDUMP, "QED_NVM_IMAGE_MDUMP", rc);
+	}
+
+	mutex_unlock(&qed_dbg_lock);
+	cdev->dbg_bin_dump = 0;
+
+	return 0;
+}
+
+int qed_dbg_all_data_size(struct qed_dev *cdev)
+{
+	u32 regs_len = 0, image_len = 0, ilt_len = 0, total_ilt_len = 0;
+	struct qed_hwfn *p_hwfn = &cdev->hwfns[cdev->engine_for_debug];
+	u8 cur_engine, org_engine;
+
+	cdev->disable_ilt_dump = false;
+	org_engine = qed_get_debug_engine(cdev);
+	for (cur_engine = 0; cur_engine < cdev->num_hwfns; cur_engine++) {
+		/* Engine specific */
+		DP_VERBOSE(cdev, QED_MSG_DEBUG,
+			   "calculating idle_chk and grcdump register length for current engine\n");
+		qed_set_debug_engine(cdev, cur_engine);
+		regs_len += REGDUMP_HEADER_SIZE + qed_dbg_idle_chk_size(cdev) +
+		    REGDUMP_HEADER_SIZE + qed_dbg_idle_chk_size(cdev) +
+		    REGDUMP_HEADER_SIZE + qed_dbg_grc_size(cdev) +
+		    REGDUMP_HEADER_SIZE + qed_dbg_reg_fifo_size(cdev) +
+		    REGDUMP_HEADER_SIZE + qed_dbg_igu_fifo_size(cdev) +
+		    REGDUMP_HEADER_SIZE +
+		    qed_dbg_protection_override_size(cdev) +
+		    REGDUMP_HEADER_SIZE + qed_dbg_fw_asserts_size(cdev);
+		ilt_len = REGDUMP_HEADER_SIZE + qed_dbg_ilt_size(cdev);
+		if (ilt_len < ILT_DUMP_MAX_SIZE) {
+			total_ilt_len += ilt_len;
+			regs_len += ilt_len;
+		}
+	}
+
+	qed_set_debug_engine(cdev, org_engine);
+
+	/* Engine common */
+	regs_len += REGDUMP_HEADER_SIZE + qed_dbg_mcp_trace_size(cdev) +
+	    REGDUMP_HEADER_SIZE + qed_dbg_phy_size(cdev);
+	qed_dbg_nvm_image_length(p_hwfn, QED_NVM_IMAGE_NVM_CFG1, &image_len);
+	if (image_len)
+		regs_len += REGDUMP_HEADER_SIZE + image_len;
+	qed_dbg_nvm_image_length(p_hwfn, QED_NVM_IMAGE_DEFAULT_CFG, &image_len);
+	if (image_len)
+		regs_len += REGDUMP_HEADER_SIZE + image_len;
+	qed_dbg_nvm_image_length(p_hwfn, QED_NVM_IMAGE_NVM_META, &image_len);
+	if (image_len)
+		regs_len += REGDUMP_HEADER_SIZE + image_len;
+	qed_dbg_nvm_image_length(p_hwfn, QED_NVM_IMAGE_MDUMP, &image_len);
+	if (image_len)
+		regs_len += REGDUMP_HEADER_SIZE + image_len;
+
+	if (regs_len > REGDUMP_MAX_SIZE) {
+		DP_VERBOSE(cdev, QED_MSG_DEBUG,
+			   "Dump exceeds max size 0x%x, disable ILT dump\n",
+			   REGDUMP_MAX_SIZE);
+		cdev->disable_ilt_dump = true;
+		regs_len -= total_ilt_len;
+	}
+
+	return regs_len;
+}
+
+int qed_dbg_feature(struct qed_dev *cdev, void *buffer,
+		    enum qed_dbg_features feature, u32 *num_dumped_bytes)
+{
+	struct qed_dbg_feature *qed_feature = &cdev->dbg_features[feature];
+	struct qed_hwfn *p_hwfn = &cdev->hwfns[cdev->engine_for_debug];
+	enum dbg_status dbg_rc;
+	struct qed_ptt *p_ptt;
+	int rc = 0;
+
+	/* Acquire ptt */
+	p_ptt = qed_ptt_acquire(p_hwfn);
+	if (!p_ptt)
+		return -EINVAL;
+
+	/* Get dump */
+	dbg_rc = qed_dbg_dump(p_hwfn, p_ptt, feature);
+	if (dbg_rc != DBG_STATUS_OK) {
+		DP_VERBOSE(cdev, QED_MSG_DEBUG, "%s\n",
+			   qed_dbg_get_status_str(dbg_rc));
+		*num_dumped_bytes = 0;
+		rc = -EINVAL;
+		goto out;
+	}
+
+	DP_VERBOSE(cdev, QED_MSG_DEBUG,
+		   "copying debugfs feature to external buffer\n");
+	memcpy(buffer, qed_feature->dump_buf, qed_feature->buf_size);
+	*num_dumped_bytes = cdev->dbg_features[feature].dumped_dwords *
+			    4;
+
+out:
+	qed_ptt_release(p_hwfn, p_ptt);
+	return rc;
+}
+
+int qed_dbg_feature_size(struct qed_dev *cdev, enum qed_dbg_features feature)
+{
+	struct qed_dbg_feature *qed_feature = &cdev->dbg_features[feature];
+	struct qed_hwfn *p_hwfn = &cdev->hwfns[cdev->engine_for_debug];
+	struct qed_ptt *p_ptt = qed_ptt_acquire(p_hwfn);
+	u32 buf_size_dwords;
+	enum dbg_status rc;
+
+	if (!p_ptt)
+		return -EINVAL;
+
+	rc = qed_features_lookup[feature].get_size(p_hwfn, p_ptt,
+						   &buf_size_dwords);
+	if (rc != DBG_STATUS_OK)
+		buf_size_dwords = 0;
+
+	/* Feature will not be dumped if it exceeds maximum size */
+	if (buf_size_dwords > MAX_DBG_FEATURE_SIZE_DWORDS)
+		buf_size_dwords = 0;
+
+	qed_ptt_release(p_hwfn, p_ptt);
+	qed_feature->buf_size = buf_size_dwords * sizeof(u32);
+	return qed_feature->buf_size;
+}
+
+int qed_dbg_phy_size(struct qed_dev *cdev)
+{
+	/* return max size of phy info and
+	 * phy mac_stat multiplied by the number of ports
+	 */
+	return MAX_PHY_RESULT_BUFFER * (1 + qed_device_num_ports(cdev));
+}
+
+u8 qed_get_debug_engine(struct qed_dev *cdev)
+{
+	return cdev->engine_for_debug;
+}
+
+void qed_set_debug_engine(struct qed_dev *cdev, int engine_number)
+{
+	DP_VERBOSE(cdev, QED_MSG_DEBUG, "set debug engine to %d\n",
+		   engine_number);
+	cdev->engine_for_debug = engine_number;
+}
+
+void qed_dbg_pf_init(struct qed_dev *cdev)
+{
+	const u8 *dbg_values = NULL;
+	int i;
+
+	/* Sync ver with debugbus qed code */
+	qed_dbg_set_app_ver(TOOLS_VERSION);
+
+	/* Debug values are after init values.
+	 * The offset is the first dword of the file.
+	 */
+	dbg_values = cdev->firmware->data + *(u32 *)cdev->firmware->data;
+
+	for_each_hwfn(cdev, i) {
+		qed_dbg_set_bin_ptr(&cdev->hwfns[i], dbg_values);
+		qed_dbg_user_set_bin_ptr(&cdev->hwfns[i], dbg_values);
+	}
+
+	/* Set the hwfn to be 0 as default */
+	cdev->engine_for_debug = 0;
+}
+
+void qed_dbg_pf_exit(struct qed_dev *cdev)
+{
+	struct qed_dbg_feature *feature = NULL;
+	enum qed_dbg_features feature_idx;
+
+	/* debug features' buffers may be allocated if debug feature was used
+	 * but dump wasn't called
+	 */
+	for (feature_idx = 0; feature_idx < DBG_FEATURE_NUM; feature_idx++) {
+		feature = &cdev->dbg_features[feature_idx];
+		if (feature->dump_buf) {
+			vfree(feature->dump_buf);
+			feature->dump_buf = NULL;
+		}
+	}
+}
