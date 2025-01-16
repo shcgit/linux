@@ -5202,9 +5202,6 @@ static void rawnand_check_cont_read_support(struct nand_chip *chip)
 	if (chip->read_retries)
 		return;
 
-	if (of_machine_is_compatible("ti,am33xx"))
-		return;
-
 	if (!nand_lp_exec_cont_read_page_op(chip, 0, 0, NULL,
 					    mtd->writesize, true))
 		chip->controller->supported_op.cont_read = 1;
