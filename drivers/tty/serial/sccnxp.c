@@ -1078,7 +1078,7 @@ static struct platform_driver sccnxp_uart_driver = {
 		.of_match_table	= sccnxp_dt_id_table,
 	},
 	.probe		= sccnxp_probe,
-	.remove_new	= sccnxp_remove,
+	.remove		= sccnxp_remove,
 	.id_table	= sccnxp_id_table,
 };
 module_platform_driver(sccnxp_uart_driver);
